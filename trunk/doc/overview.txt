@@ -1,0 +1,368 @@
+[ WARNING:  EXTREMELY PRELIMINARY! ]
+
+SmogJob: A distributed job system
+Brad Whitaker <whitaker@danga.com>
+
+==================================
+
+TODO: error responses to malformed/unexpected packets?
+      priorities, expirations of old/irrelevant jobs
+      upper-layer handling of async system going down + reopulation of jobs
+
+Architecture:
+
+    [ job_server_1 ] \
+    [ job_server_2 ]  | <====> application
+    [ job_server_n ] /
+
+         \ | /
+          -*-    persistent tcp connections between job servers/workers
+         / | \ 
+
+      [ worker_1 ]
+      [ worker_2 ]
+      [ worker_n ]
+
+
+Guarantees: 
+
+1) Each job server will kill dups within that job server (not global)
+2) Jobs will be retried as specified, as long as the job server is running
+3) Each worker will have exactly one task at a time
+   ... ?
+
+Non-Guarantees:
+
+1) Global duplicate checking is not provided
+2) No job is guaranteed to complete
+3) Loss of any job server will lose any jobs registered with it
+   ... ?
+
+
+Work flow:
+
+1) Job server starts up, all workers connect and announce their 
+
+2) Application sends job to random job server, noting the job record so it can
+   be recreated in the future if necessary.
+
+   a) Synchronous: Application stays connected and waits for response
+   b) Asynchronous: 
+
+3) Job server handles job:
+
+   Possible messages:
+
+      [worker => job server]
+      "here's what i can do."
+      "goodbye."
+      "i'm about to sleep."
+      "got a job for me?"
+      "i'm 1/100 complete now."
+      "i've completed my job."
+
+      [job server => worker]
+      "noop." / "wake up."
+      "here's a job to do."
+
+      [application => job server]
+      "create this new job."
+      "how far along is this job?"
+      "is this job finished?"
+
+      [job server => application]
+      "okay (here is its handle)."
+      "job is 1/100 complete."
+      "job completed as follows: ..."
+
+
+   Request/Response cycles:
+
+      [ worker <=> job server ]
+      "here's what i can do"       => (announcement)
+      "goodbye"                    => (announcement)
+      "i'm about to sleep"         => (announcement)
+      "i'm 1/100 complete now"     => (announcement)
+      "i've completed my job"      => (announcement)
+      "got a job for me?"          => "here's a job to do."
+
+      [ application <=> job server ]
+      "create this new job."       => "okay (here is its handle)."
+      "how far along is this job?" => "job is 1/100 complete."
+      "is this job finished?"      => "job completed as follows: ..."   
+
+      [ job server <=> worker ]
+      "wake up."                   => (worker wakes up from sleep)
+      "here is a job to do" => "i'm 1/100 complete now."
+                            => "i've completed my job"
+
+      [ job server <=> application ]
+      (only speaks in response to application requests)      
+
+
+   Best case conversation example:
+
+      worker_n     => job_server_n: "got a job for me?"
+      job_server_n => worker_n:     "yes, here is a job i've locked for you"
+      worker_n     => job_server_n: "here is the result"
+
+   Worse case:
+
+      while ($time < $sleep_threshold) {
+         for $js (1..n) {
+            worker => job_server_$js: "got a job for me?"
+            job_server_$js => worker: "no, sorry"
+         }
+      }
+
+      worker => all_job_servers: "going to sleep"
+
+      [ worker receives wakeup packet ] or [ t seconds elapse ]
+
+      worker wakes up and resumes loop
+
+      
+Packet types:
+
+   Generic header:
+
+      [ 4 byte magic
+        1 byte packet type
+        4 byte length ]
+
+      Magic: 
+         4 opaque bytes to verify state machine
+
+      Packet type:
+         0x00: noop                  "noop." / "wake up."            [JS=>W]
+         0x01: worker_connect        "here's what i can do."         [W=>JS]
+         0x02: worker_disconnect     "goodbye."                      [W=>JS]
+         0x03: worker_sleep          "i'm about to sleep."           [W=>JS]
+         0x04: job_create_req        "create this new job."          [A=>JS]
+         0x05: job_create_res        "okay (here is its handle)."    [JS=>A]
+         0x06: job_assign_req        "got a job for me?"             [W=>JS]
+         0x07: job_assign_res        "here's a job to do."           [JS=>W]
+         0x08: job_status_announce   "i'm 1/100 complete now."       [W=>JS]
+         0x09: job_status_req        "how far along is this job?"    [A=>JS]
+         0x0A: job_status_res        "job is 1/100 complete."        [JS=>A]
+         0x0B: job_complete_announce "i've completed my job."        [W=>JS]
+         0x0C: job_complete_req      "is this job finished?"         [A=>JS]
+         0x0D: job_complete_res      "job completed as follows: ..." [JS=>A]
+
+      Length:
+         Post-header data length
+
+
+   Packet: noop
+
+      Perform no operation, but perhaps used to wake up sleeping worker
+
+      [ no args ]
+
+   Packet: worker_connect
+
+      Worker connects to server & announces its capabilities
+
+      [ null-sep list of job names accepted,
+        up to length specified by generic header ]
+
+   Packet: worker_disconnect 
+
+      Worker disconnects from server
+
+      [ no args ]
+
+   Packet: worker_sleep
+
+      Worker informs job server of its intent to sleep.  After sleeping,
+      the worker will enter a select loop, monitoring sockets to all
+      job servers.  A noop will be used to wake it up later.
+
+      [ no args ]
+
+   Packet: job_create_req
+
+      Application registers a new job with the job server.  More 
+      explanation of each field can be found in the "Job Fields" section.
+
+      [ null-terminated ascii job name,
+        null-terminated ascii duplicate key (value can be simply \0),
+        1 byte flags { currently unused },
+        1 byte type  { 0=async+wait, 1=async+handle, 2=async+throw-away },
+        binary args up to length ]
+
+      Job fields: 
+         name    => name of task (command name)
+         dupkey  => duplicate key, if duplicate checking is being requested
+                    eg. 'yyyy-mm-dd', 'uid-friends', etc
+         flags   => reserved for later use
+         type    => sync+wait, async+handle, async+throw-away
+         args    => binary data args to send to worker (storable object?)
+
+      Job type explanations:
+
+         sync+wait:
+            Application is requesting a job to run synchronously.  Status 
+            updates and result value should be streamed back.
+
+         async+handle:
+            Application is requesting a job to run asynchronously, but needs 
+            a handle to check back for progress/result value.  Handle unique 
+            only to current job server, so app needs to remember which is 
+            handling the task.
+
+         async+throw-away: 
+            Application is requesting that a job will be run eventually, but 
+            doesn't care about the result, or the result will be logged via 
+            the worker.
+
+
+   Packet: job_create_res
+
+      Job server responds to application's request for a new job, possibly 
+      with a handle if the job type was set to 'async+handle'.
+
+      [ ascii job handle, valid only for current job server ]
+
+   Packet: job_assign_req
+
+      Worker requests a new job from job server.
+
+      [ no args ]
+
+   Packet: job_assign_res
+
+      Server assigns a new task to worker, in response to worker's request
+
+      [ null-terminated ascii job name,
+        binary args up to packet length ]
+
+   Packet: job_status_announce
+
+      Worker posts incremental job status to server, along with an optional
+      estimated time of completion in seconds.
+
+      [ 4 byte numerator,
+        4 byte denominator,
+        4 byte time remaining in seconds ]
+
+   Packet: job_status_req
+
+      Application checks job status from job server via a pre-fetched handle.
+
+      [ handle whose status should be checked ]
+
+   Packet: job_status_res
+
+      Job server supplies a completion ration and possibly estimated time
+      of completion to the application.
+
+      [ 4 byte numerator,
+        4 byte denominator,
+        4 byte time remaining in seconds ]
+
+   Packet: job_complete_announce
+
+      Worker posts final job results to the job server.
+
+      [ 1 byte result code {0=success, 1-255=errcode},
+        binary result data up to length ]
+
+      Note that for synchronous requests, this will likely be streamed directly
+      to the already-waiting application.  This packet type has little meaning 
+      to the application in asynchronous requests.
+
+   Packet: job_complete_req
+
+      Application asks job server if a job is completed yet.
+
+      [ handle whose status should be checked ]
+
+   Packet: job_complete_res
+
+      Job server responds to application letting it know if a job has completed
+      yet.  If so, error code and response are provided in a manner similar to
+      the job_complete_announce packet type.
+
+      [ 4 byte job status  {0=incomplete, 1+=elapsed time in seconds},
+        1 byte result code {0=success, 1-255=errcode},
+        binary result data up to length ]
+
+      Note that the job_complete_[req/res] modes have little value for synchronous
+      requests which will have responses
+
+
+
+Long-term result logging: (upper-layer API)
+
+   Very brief notes, but:
+
+   Need an easy-to-use API so workers can log tasks:
+
+      register_start_task($task, $time)
+      register_task_result($task, $time, $result)
+      ...
+
+   API examples would log to database so later there is a centralized location
+   to verify that asynchronous jobs actually completed, and what their result
+   or error conditions were.
+  
+
+Task summary:
+
+1) mail
+   name    => mail
+   dupkey  => '' (don't check dups)
+   type    => async+handle
+   args    => storable MIME::Lite/etc
+
+2) gal resize
+   name    => resize
+   dupkey  => uid-gallid-w-h
+   type    => async+handle
+   args    => storable of images to resize/how   
+
+3) thumb pregen
+   name    => thumbgen
+   dupkey  => uid-upicid-w-h
+   type    => async+handle
+   args    => storable of images to resize
+
+4) LJ crons
+   name    => pay_updateaccounts/etc
+   dupkey  => '' (no dup checking)
+   type    => async
+   args    => @ARGV to pass to job?
+
+6) Dirty Flushing
+   name    => dirty
+   dupkey  => friends-uid, backup-uid, etc
+   type    => async+handle
+   args    => none
+
+7) CmdBuffer jobs
+   name    => weblogscom
+   dupkey  => uid
+   type    => async+throw-away
+   args    => none
+
+8) RSS fetching
+   name    => rss
+   dupkey  => uid
+   type    => async+handle
+   args    => none
+
+9) captcha generation
+   name    => captcha
+   dupkey  => dd-hh ? maybe '1' or something
+   type    => async+throw-away
+   args    => none
+
+10) birthday emails
+   name    => bday
+   dupkey  => yyyy-mm-dd
+   type    => async+handle
+   args    => none
+
+11) restart web nodes
+   -- ask brad about this?
