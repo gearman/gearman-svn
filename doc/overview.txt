@@ -1,6 +1,6 @@
 [ WARNING:  EXTREMELY PRELIMINARY! ]
 
-SmogJob: A distributed job system
+GearMan: A distributed job system
 Brad Whitaker <whitaker@danga.com>
 
 ==================================
