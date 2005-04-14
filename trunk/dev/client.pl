@@ -15,9 +15,14 @@ my $get = sub {
     return Gearman::Util::read_res_packet($sock, \$err);;
 };
 
+#$send->("submit_job_bg", join("\0", "add", "", "5,3"));
+$send->("get_status", "FOO");
+my $res = $get->() or die "no handle";
+die "not a status_res packet" unless $res->{type} eq "status_res";
+
 while (1) {
     $send->("submit_job", join("\0", "add", "-", "5,3"));
-    my $res = $get->() or die "no handle";
+    $res = $get->() or die "no handle";
     print Dumper($res);
     die "not a job_created res" unless $res->{type} eq "job_created";
 

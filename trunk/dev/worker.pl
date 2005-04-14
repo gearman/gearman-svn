@@ -20,6 +20,11 @@ my $get = sub {
     }
 };
 
+$send->("can_do", "frob");
+$send->("cant_do", "frob");
+$send->("can_do", "bar");
+$send->("reset_abilities");
+
 $send->("can_do", "add");
 
 while (1) {
