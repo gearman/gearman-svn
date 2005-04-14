@@ -127,25 +127,15 @@ Packet types:
    Generic header:
 
       [ 4 byte magic
-        1 byte packet type
+        4 byte packet type
         4 byte length ]
 
-      Magic: 
-         4 opaque bytes to verify state machine
+      Magic:
+         4 opaque bytes to verify state machine "\0REQ" or "\0RES"
 
       Packet type:
-         0x00: noop                  "noop." / "wake up."            [JS=>W]
-         0x01: worker_connect        "here's what i can do."         [W=>JS]
-         0x02: worker_disconnect     "goodbye."                      [W=>JS]
-         0x03: worker_sleep          "i'm about to sleep."           [W=>JS]
-         0x04: job_create_req        "create this new job."          [A=>JS]
-         0x05: job_create_res        "okay (here is its handle)."    [JS=>A]
-         0x06: job_assign_req        "got a job for me?"             [W=>JS]
-         0x07: job_assign_res        "here's a job to do."           [JS=>W]
-         0x08: job_status_announce   "i'm 1/100 complete now."       [W=>JS]
-         0x09: job_status_req        "how far along is this job?"    [A=>JS]
-         0x0A: job_status_res        "job is 1/100 complete."        [JS=>A]
-         0x0B: job_complete_announce "i've completed my job."        [W=>JS]
+         (see Gearman::Util)
+
          0x0C: job_complete_req      "is this job finished?"         [A=>JS]
          0x0D: job_complete_res      "job completed as follows: ..." [JS=>A]
 
