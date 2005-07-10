@@ -143,12 +143,24 @@ Packet types:
 Properties of a job:
 
      func -- what function name
-     blobargs
-     uniq -- for merging
+     opaque scalar arg  (passed through end-to-end, no interpretation by libraries/server)
+     uniq key -- for merging  (default: don't merge, "-" means merge on opaque scalar)
 
      retry count
-     keep going if no listeners?
- 
+     fail after time  -- treat a timeout as a failure
+     do job if dequeued and no listeners ("submit_job_bg")
+     priority ("submit_job_high")
+     on_* handlers
+
+Notes:
+
+   -- document whether on_fail gets called on all failures, or just last one, when retry_count is in use
+   -- document that uniq merging isn't guaranteed, just that it's permitted.  if two tasks must not run
+      at the same time, the task itself needs to do appropriate locking with itself / other tasks.
+   -- the uniq merging will generally work in practice with multiple Job servers because the client
+      hashes the (func + opaque_arg) onto the set of servers
+
+
 
 Task summary:
 
