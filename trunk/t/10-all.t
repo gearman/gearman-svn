@@ -5,6 +5,7 @@ use File::Spec;
 use Gearman::Client;
 use Storable qw( freeze );
 use Test::More tests => 1;
+use IO::Socket::INET;
 
 use constant PORT => 9000;
 our @Children;
@@ -15,7 +16,8 @@ start_server(PORT);
 start_server(PORT + 1);
 
 ## Sleep, wait for servers to start up before connecting workers.
-sleep 2;
+wait_for_port(PORT);
+wait_for_port(PORT + 1);
 
 start_worker(PORT);
 start_worker(PORT + 1);
@@ -54,4 +56,15 @@ sub start_child {
 
 sub kill_children {
     kill INT => @Children;
+}
+
+sub wait_for_port {
+    my($port) = @_;
+    my $start = time;
+    while (1) {
+	my $sock = IO::Socket::INET->new(PeerAddr => "127.0.0.1:$port");
+	return 1 if $sock;
+	select undef, undef, undef, 0.25;
+	die "Timeout waiting for port $port to startup" if time > $start + 5;
+    }
 }
