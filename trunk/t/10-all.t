@@ -66,8 +66,7 @@ is($client->do_task('fail'), undef, 'Job that failed naturally returned undef');
 ## Worker process exits.
 is($client->do_task('fail_exit'), undef,
     'Job that failed via exit returned undef');
-## The fail_exit just killed off a worker--make sure it gets respawned.
-respawn_children();
+pid_is_dead(wait());
 
 ## Worker process times out (takes longer than fail_after_idle seconds).
 TODO: {
@@ -108,25 +107,35 @@ $tasks->add_task(echo_ws => 1, { on_complete => sub { $out .= ${ $_[0] } } });
 $tasks->add_task(echo_ws => 2, { on_complete => sub { $out .= ${ $_[0] } } });
 $tasks->add_task(echo_ws => 'x', {
     on_fail => sub {
-        $tasks->add_task(echo_ws => 4, {
+        $tasks->add_task(echo_ws => 'p', {
             on_complete => sub { $out .= ${ $_[0] } },
             high_priority => 1
         });
     },
 });
 $tasks->add_task(echo_ws => 3, { on_complete => sub { $out .= ${ $_[0] } } });
+$tasks->add_task(echo_ws => 4, { on_complete => sub { $out .= ${ $_[0] } } });
+$tasks->add_task(echo_ws => 5, { on_complete => sub { $out .= ${ $_[0] } } });
+$tasks->add_task(echo_ws => 6, { on_complete => sub { $out .= ${ $_[0] } } });
 $tasks->wait;
-is($out, '1243', 'High priority tasks executed in priority order.');
+like($out, qr/p.+6/, 'High priority tasks executed in priority order.');
 ## We just killed off all but one worker--make sure they get respawned.
 respawn_children();
 
+sub pid_is_dead {
+    my($pid) = @_;
+    return if $pid == -1;
+    my $type = delete $Children{$pid};
+    if ($type eq 'W') {
+        ## Right now we can only restart workers.
+        start_worker(PORT, 2);
+    }
+}
+
 sub respawn_children {
     for my $pid (keys %Children) {
-        if (waitpid $pid, WNOHANG) {
-            if ($Children{$pid} eq 'W') {
-                ## Right now we can only restart workers.
-                start_worker(PORT, 2);
-            }
+        if (waitpid($pid, WNOHANG) > 0) {
+            pid_is_dead($pid);
         }
     }
 }
