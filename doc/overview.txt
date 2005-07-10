@@ -139,6 +139,15 @@ Packet types:
       Length:
          Post-header data length
 
+
+Properties of a job:
+
+     func -- what function name
+     blobargs
+     uniq -- for merging
+
+     retry count
+     keep going if no listeners?
  
 
 Task summary:
