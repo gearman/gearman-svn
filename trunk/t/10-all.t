@@ -4,7 +4,7 @@ use FindBin qw( $Bin );
 use File::Spec;
 use Gearman::Client;
 use Storable qw( freeze );
-use Test::More tests => 16;
+use Test::More tests => 20;
 use IO::Socket::INET;
 use POSIX qw( :sys_wait_h );
 
@@ -121,6 +121,21 @@ $tasks->wait;
 like($out, qr/p.+6/, 'High priority tasks executed in priority order.');
 ## We just killed off all but one worker--make sure they get respawned.
 respawn_children();
+
+## Test dispatch_background and get_status.
+my $out;
+my $handle = $client->dispatch_background(long => undef, {
+    on_complete => sub { $out = ${ $_[0] } },
+});
+ok($handle, 'Got a handle back from dispatching background job');
+my $status = $client->get_status($handle);
+isa_ok($status, 'Gearman::JobStatus');
+ok($status->running, 'Job is still running');
+is($status->percent, .5, 'Job is 50 percent complete');
+do {
+    sleep 1;
+    $status = $client->get_status($handle);
+} until $status->percent == 1;
 
 sub pid_is_dead {
     my($pid) = @_;
