@@ -19,11 +19,12 @@ start_server(PORT + 1);
 wait_for_port(PORT);
 wait_for_port(PORT + 1);
 
-start_worker(PORT);
-start_worker(PORT + 1);
+## Look for 2 job servers, starting at port number PORT.
+start_worker(PORT, 2);
+start_worker(PORT, 2);
 
 my $client = Gearman::Client->new;
-$client->job_servers('127.0.0.1:' . PORT);
+$client->job_servers('127.0.0.1:' . PORT, '127.0.0.1:' . (PORT + 1));
 my $tasks = $client->new_task_set;
 my $sum;
 my $handle = $tasks->add_task(sum => freeze([ 3, 5 ]), {
@@ -39,9 +40,12 @@ sub start_server {
 }
 
 sub start_worker {
-    my($port) = @_;
+    my($port, $num) = @_;
     my $worker = File::Spec->catfile($Bin, 'worker.pl');
-    start_child([ $worker, '-p', $port ]);
+    my $servers = join ',',
+                  map '127.0.0.1:' . (PORT + $_),
+                  0..$num-1;
+    start_child([ $worker, '-s', $servers ]);
 }
 
 sub start_child {
