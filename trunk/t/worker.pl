@@ -6,12 +6,13 @@ use Storable qw( thaw );
 use Getopt::Long qw( GetOptions );
 
 GetOptions(
-    'p|port=i' => \my($port),
+    's|servers=s', \my($servers),
 );
-die "usage: $0 <port>" unless $port;
+die "usage: $0 -s <servers>" unless $servers;
+my @servers = split /,/, $servers;
 
 my $worker = Gearman::Worker->new;
-$worker->job_servers('127.0.0.1:' . $port);
+$worker->job_servers(@servers);
 $worker->register_function(sum => sub {
     my $sum = 0;
     $sum += $_ for @{ thaw($_[0]->arg) };
