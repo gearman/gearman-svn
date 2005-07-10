@@ -152,6 +152,9 @@ Properties of a job:
      priority ("submit_job_high")
      on_* handlers
 
+     behavior when there's no worker registered for that job type?
+
+
 Notes:
 
    -- document whether on_fail gets called on all failures, or just last one, when retry_count is in use
