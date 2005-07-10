@@ -4,7 +4,7 @@ use FindBin qw( $Bin );
 use File::Spec;
 use Gearman::Client;
 use Storable qw( freeze );
-use Test::More tests => 11;
+use Test::More tests => 16;
 use IO::Socket::INET;
 use POSIX qw( :sys_wait_h );
 
@@ -47,13 +47,25 @@ $tasks->wait;
 is($sum, 8, 'add_task/wait returned 8 for sum');
 is($failed, 0, 'on_fail not called on a successful result');
 
+## Now try a task set with 2 tasks, and make sure they are both completed.
+$tasks = $client->new_task_set;
+my @sums;
+$tasks->add_task(sum => freeze([ 1, 1 ]), {
+    on_complete => sub { $sums[0] = ${ $_[0] } },
+});
+$tasks->add_task(sum => freeze([ 2, 2 ]), {
+    on_complete => sub { $sums[1] = ${ $_[0] } },
+});
+$tasks->wait;
+is($sums[0], 2, 'First task completed (sum is 2)');
+is($sums[1], 4, 'Second task completed (sum is 4)');
+
 ## Test some failure conditions:
 ## Normal failure (worker returns undef or dies within eval).
 is($client->do_task('fail'), undef, 'Job that failed naturally returned undef');
 ## Worker process exits.
 is($client->do_task('fail_exit'), undef,
     'Job that failed via exit returned undef');
-
 ## The fail_exit just killed off a worker--make sure it gets respawned.
 respawn_children();
 
@@ -64,16 +76,49 @@ TODO: {
         'Job that timed out after 3 seconds returns failure (fail_after_idle)');
 }
 
+## Test retry_count.
+my $retried = 0;
+is($client->do_task('fail' => '', {
+    on_retry => sub { $retried++ },
+    retry_count => 3,
+}), undef, 'Failure response is still failure, even after retrying');
+is($retried, 3, 'Retried 3 times');
+
 my $tasks = $client->new_task_set;
 $completed = 0;
 $failed = 0;
-my $handle = $tasks->add_task(fail => '', {
+$tasks->add_task(fail => '', {
     on_complete => sub { $completed = 1 },
     on_fail => sub { $failed = 1 },
 });
 $tasks->wait;
 is($completed, 0, 'on_complete not called on failed result');
 is($failed, 1, 'on_fail called on failed result');
+
+## Test high_priority.
+## Create a taskset with 4 tasks, and have the 3rd fail.
+## In on_fail, add a new task with high priority set, and make sure it
+## gets executed before task 4. To make this reliable, we need to first
+## kill off all but one of the worker processes.
+my @worker_pids = grep $Children{$_} eq 'W', keys %Children;
+kill INT => @worker_pids[1..$#worker_pids];
+$tasks = $client->new_task_set;
+$out = '';
+$tasks->add_task(echo_ws => 1, { on_complete => sub { $out .= ${ $_[0] } } });
+$tasks->add_task(echo_ws => 2, { on_complete => sub { $out .= ${ $_[0] } } });
+$tasks->add_task(echo_ws => 'x', {
+    on_fail => sub {
+        $tasks->add_task(echo_ws => 4, {
+            on_complete => sub { $out .= ${ $_[0] } },
+            high_priority => 1
+        });
+    },
+});
+$tasks->add_task(echo_ws => 3, { on_complete => sub { $out .= ${ $_[0] } } });
+$tasks->wait;
+is($out, '1243', 'High priority tasks executed in priority order.');
+## We just killed off all but one worker--make sure they get respawned.
+respawn_children();
 
 sub respawn_children {
     for my $pid (keys %Children) {
