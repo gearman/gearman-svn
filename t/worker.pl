@@ -30,4 +30,12 @@ $worker->register_function(echo_ws => sub {
     $_[0]->arg eq 'x' ? undef : $_[0]->arg;
 });
 
+$worker->register_function(long => sub {
+    my($job) = @_;
+    $job->set_status(50, 100);
+    sleep 2;
+    $job->set_status(100, 100);
+    sleep 2;
+});
+
 $worker->work while 1;
