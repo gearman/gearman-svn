@@ -1,9 +1,33 @@
-#!/usr/bin/perl
-
 #TODO: fail_after_idle
 #TODO: find out what fail_after_idle means in this context
 
 package Gearman::Client::Danga;
+
+=head1 NAME
+
+Gearman::Client::Danga - Asynchronous client module for Gearman
+
+=head1 SYNOPSIS
+
+    use Gearman::Client::Danga;
+
+    # Instantiate a new Gearman::Client::Danga object.
+    $client = Gearman::Client::Danga->new(
+        job_servers => [ '127.0.0.1', '192.168.0.1:123' ],
+    );
+
+    # Overwrite job server list with a new one.
+    $client->job_servers( '10.0.0.1' );
+
+    # Start a task
+    $client->add_task( $task );
+
+    # Shutdown all job server connections, so we can destruct.
+    $client->shutdown;
+
+    # Better examples forthcoming, see tests or something.
+
+=cut
 
 use strict;
 
@@ -15,6 +39,10 @@ use fields qw(job_servers);
 use Gearman::Objects;
 use Gearman::Task;
 use Gearman::JobStatus;
+
+use vars qw($VERSION);
+
+$VERSION = "0.00_01";
 
 sub DEBUGGING () { 1 }
 
