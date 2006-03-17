@@ -19,6 +19,10 @@ Gearman::Client::Danga - Asynchronous client module for Gearman
     # Overwrite job server list with a new one.
     $client->job_servers( '10.0.0.1' );
 
+    # Read list of job servers out of the client.
+    $arrayref = $client->job_servers;
+    @array = $client->job_servers;
+
     # Start a task
     $client->add_task( $task );
 
@@ -30,6 +34,7 @@ Gearman::Client::Danga - Asynchronous client module for Gearman
 =cut
 
 use strict;
+use warnings;
 
 use IO::Handle;
 use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET);
@@ -62,21 +67,30 @@ sub new {
 # getter/setter
 sub job_servers {
     my Gearman::Client::Danga $self = shift;
-    
-    return $self->{job_servers} unless @_;
 
-    $self->shutdown;
-    
-    my $list = [];
+    my $job_servers = $self->{job_servers};
 
-    foreach (@_) {
-        my ($host, $port) = split /:/;
-        $port ||= 7003;
-        my $server = Gearman::Client::Danga::Socket->new( $host, $port );
-        
-        push @$list, $server;
+    if (@_) {
+        # Maybe we shouldn't do this, then existing tasks can finish and the connection will close on its own?
+        $self->shutdown;
+
+        @$job_servers = ();
+
+        foreach (@_) {
+            my $server = Gearman::Client::Danga::Connection->new( hostspec => $_ );
+            if ($server) {
+                push @$job_servers, $server;
+            }
+            else {
+                warn "Job Server '$_' failed to initialize, bad hostspec?\n";
+            }
+        }
     }
-    return $self->{job_servers} = $list;
+    
+    my @list = map {$_->hostspec} @$job_servers unless @_;
+
+    return @list if wantarray;
+    return [@list];
 }
 
 sub shutdown {
@@ -93,13 +107,17 @@ sub add_task {
 
     my @job_servers = grep { $_->safe } @{$self->{job_servers}};
 
+    warn "Safe servers: " . @job_servers . " out of " . @{$self->{job_servers}} . "\n" if DEBUGGING;
+
     if (@job_servers) {
         my $js;
         if (defined( my $hash = $task->hash )) {
+            # Task is hashed, use key to fetch job server
             $js = @job_servers[$hash % @job_servers];
         }
         else {
-            $js = @job_servers->[int( rand( @job_servers ))];
+            # Task is not hashed, random job server
+            $js = @job_servers[int( rand( @job_servers ))];
         }
         $task->{taskset} = $self;
         $js->add_task( $task );
@@ -110,12 +128,14 @@ sub add_task {
 }
 
 
-package Gearman::Client::Danga::Socket;
+package Gearman::Client::Danga::Connection;
 
+use strict;
+use warnings;
 
 use Danga::Socket;
 use base 'Danga::Socket';
-use fields qw(state waiting need_handle parser host port to_send safe);
+use fields qw(state waiting need_handle parser hostspec to_send deadtime);
 
 use Gearman::Task;
 use Gearman::Util;
@@ -125,31 +145,36 @@ use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 sub DEBUGGING () { 1 }
 
 sub new {
-    my Gearman::Client::Danga::Socket $self = shift;
-    my $host = shift;
-    my $port = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
+    
+    my %opts = @_;
 
     $self = fields::new( $self ) unless ref $self;
 
-    $self->{host} = $host;
-    $self->{port} = $port;
+    $self->{hostspec} = delete( $opts{hostspec} ) or return;
+    
     $self->{state} = 'disconnected';
     $self->{waiting} = {};
     $self->{need_handle} = [];
     $self->{to_send} = [];
-    $self->{safe} = 1;
+    $self->{deadtime} = 0;
 
     return $self;
 }
 
+sub hostspec {
+    my Gearman::Client::Danga::Connection $self = shift;
+
+    return $self->{hostspec};
+}
+
 sub connect {
-    my Gearman::Client::Danga::Socket $self = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
 
     $self->{state} = 'connecting';
 
-    my $sock = $self->{sock};
-    my $host = $self->{host};
-    my $port = $self->{port};
+    my ($host, $port) = split /:/, $self->{hostspec};
+    $port ||= 7003;
 
     socket my $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
     IO::Handle::blocking($sock, 0);
@@ -170,8 +195,7 @@ sub connect {
 }
 
 sub event_write {
-    print "event_write\n";
-    my Gearman::Client::Danga::Socket $self = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
 
     if ($self->{state} eq 'connecting') {
         $self->{state} = 'ready';
@@ -190,9 +214,9 @@ sub event_write {
 }
 
 sub event_read {
-    my Gearman::Client::Danga::Socket $self = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
 
-    my $input = $self->read( 128 x 1024 );
+    my $input = $self->read( 128 * 1024 );
 
     if ($input) {
         $self->{parser}->parse_data( $input );
@@ -203,41 +227,42 @@ sub event_read {
 }
 
 sub event_err {
-    my Gearman::Client::Danga::Socket $self = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
 
     if (DEBUGGING and $self->{state} eq 'connecting') {
-        warn "Jobserver, $self->{host}:$self->{port} ($self) has failed to connect properly\n";
+        warn "Jobserver, $self->{hostspec} ($self) has failed to connect properly\n";
     }
 
-    $self->_mark_unsafe;
+    $self->mark_unsafe;
     $self->close( "error" );
 }
 
-sub mark_unsafe {
-    my Gearman::Client::Danga::Socket $self = shift;
-
-    $self->{safe} = 0;
-
-    Danga::Socket->AddTimer( 10, sub { $self->{safe} = 1; } );
-}
-
 sub close {
-    my Gearman::Client::Danga::Socket $self = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
     my $reason = shift;
+
+    if ($self->{state} ne 'disconnected') {
+        $self->{state} = 'disconnected';
+        $self->SUPER::close( $reason );
+    }
     
-    $self->{state} = 'disconnected';
-    $self->SUPER::close( $reason );
     $self->_requeue_all;
 }
 
+sub mark_unsafe {
+    my Gearman::Client::Danga::Connection $self = shift;
+
+    $self->{deadtime} = time + 10;
+}
+
 sub safe {
-    my Gearman::Client::Danga::Socket $self = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
     
-    return $self->{safe};
+    return $self->{deadtime} <= time;
 }
 
 sub add_task {
-    my Gearman::Client::Danga::Socket $self = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
     my Gearman::Task $task = shift;
 
     if ($self->{state} eq 'disconnected') {
@@ -250,7 +275,7 @@ sub add_task {
 }
 
 sub _requeue_all {
-    my Gearman::Client::Danga::Socket $self = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
     
     my $to_send = $self->{to_send};
     my $need_handle = $self->{need_handle};
@@ -263,23 +288,23 @@ sub _requeue_all {
     while (@$to_send) {
         my $task = shift @$to_send;
         warn "Task $task in to_send queue during socket error, queueing for redispatch\n" if DEBUGGING;
-        $task->{taskset}->add_task( $task );
+        $task->fail;
     }
 
     while (@$need_handle) {
         my $task = shift @$need_handle;
         warn "Task $task in need_handle queue during socket error, queueing for redispatch\n" if DEBUGGING;
-        $task->{taskset}->add_task( $task );
+        $task->fail;
     }
 
     while (my ($shandle, $task) = each( %$waiting )) {
         warn "Task $task ($shandle) in waiting queue during socket error, queueing for redispatch\n" if DEBUGGING;
-        $task->{taskset}->add_task( $task );
+        $task->fail;
     }
 }
 
 sub process_packet {
-    my Gearman::Client::Danga::Socket $self = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
     my $res = shift;
 
     if ($res->{type} eq "job_created") {
@@ -318,7 +343,7 @@ sub process_packet {
         $task->complete($res->{'blobref'});
         delete $self->{waiting}{$shandle} unless @$task_list;
 
-        warn "Jobs: " . scalar( keys( %{$self->{waiting}} ) ) . "\n";
+        warn "Jobs: " . scalar( keys( %{$self->{waiting}} ) ) . "\n" if DEBUGGING;
 
         return 1;
     }
@@ -346,7 +371,7 @@ sub process_packet {
 
 # note the failure of a task given by its jobserver-specific handle
 sub _fail_jshandle {
-    my Gearman::Client::Danga::Socket $self = shift;
+    my Gearman::Client::Danga::Connection $self = shift;
     my $shandle = shift;
 
     my $task_list = $self->{waiting}->{$shandle} or
@@ -393,127 +418,3 @@ sub on_error {
 
 1;
 __END__
-
-=head1 NAME
-
-Gearman::Client - Client for gearman distributed job system
-
-=head1 SYNOPSIS
-
-    use Gearman::Client;
-    my $client = Gearman::Client->new;
-    $client->job_servers('127.0.0.1', '10.0.0.1');
-
-    # running a single task
-    my $result_ref = $client->do_task("add", "1+2");
-    print "1 + 2 = $$result_ref\n";
-
-    # waiting on a set of tasks in parallel
-    my $taskset = $client->new_task_set;
-    $taskset->add_task( "add" => "1+2", {
-       on_complete => sub { ... } 
-    });
-    $taskset->add_task( "divide" => "5/0", {
-       on_fail => sub { print "divide by zero error!\n"; },
-    });
-    $taskset->wait;
-
-
-=head1 DESCRIPTION
-
-I<Gearman::Client> is a client class for the Gearman distributed job
-system, providing a framework for sending jobs to one or more Gearman
-servers.  These jobs are then distributed out to a farm of workers.
-
-Callers instantiate a I<Gearman::Client> object and from it dispatch
-single tasks, sets of tasks, or check on the status of tasks.
-
-=head1 USAGE
-
-=head2 Gearman::Client->new(%options)
-
-Creates a new I<Gearman::Client> object, and returns the object.
-
-If I<%options> is provided, initializes the new client object with the
-settings in I<%options>, which can contain:
-
-=over 4
-
-=item * job_servers
-
-Calls I<job_servers> (see below) to initialize the list of job
-servers.  Value in this case should be an arrayref.
-
-=back
-
-=head2 $client->job_servers(@servers)
-
-Initializes the client I<$client> with the list of job servers in I<@servers>.
-I<@servers> should contain a list of IP addresses, with optional port
-numbers. For example:
-
-    $client->job_servers('127.0.0.1', '192.168.1.100:7003');
-
-If the port number is not provided, C<7003> is used as the default.
-
-=head2 $client-E<gt>do_task($task)
-
-=head2 $client-E<gt>do_task($funcname, $arg, \%options)
-
-Dispatches a task and waits on the results.  May either provide a
-L<Gearman::Task> object, or the 3 arguments that the Gearman::Task
-constructor takes.
-
-Returns a scalar reference to the result, or undef on failure.
-
-If you provide on_complete and on_fail handlers, they're ignored, as
-this function currently overrides them.
-
-=head2 $client-E<gt>dispatch_background($task)
-
-=head2 $client-E<gt>dispatch_background($funcname, $arg, \%options)
-
-Dispatches a task and doesn't wait for the result.  Return value
-is an opaque scalar that can be used to refer to the task.
-
-=head2 $taskset = $client-E<gt>new_task_set
-
-Creates and returns a new I<Gearman::Taskset> object.
-
-=head2 $taskset-E<gt>add_task($task)
-
-=head2 $taskset-E<gt>add_task($funcname, $arg, $uniq)
-
-=head2 $taskset-E<gt>add_task($funcname, $arg, \%options)
-
-Adds a task to a taskset.  Three different calling conventions are
-available.
-
-=head2 $taskset-E<gt>wait
-
-Waits for a response from the job server for any of the tasks listed
-in the taskset. Will call the I<on_*> handlers for each of the tasks
-that have been completed, updated, etc.  Doesn't return until
-everything has finished running or failing.
-
-=head1 EXAMPLES
-
-=head2 Summation
-
-This is an example client that sends off a request to sum up a list of
-integers.
-
-    use Gearman::Client;
-    use Storable qw( freeze );
-    my $client = Gearman::Client->new;
-    $client->job_servers('127.0.0.1');
-    my $tasks = $client->new_task_set;
-    my $handle = $tasks->add_task(sum => freeze([ 3, 5 ]), {
-        on_complete => sub { print ${ $_[0] }, "\n" }
-    });
-    $tasks->wait;
-
-See the I<Gearman::Worker> documentation for the worker for the I<sum>
-function.
-
-=cut
