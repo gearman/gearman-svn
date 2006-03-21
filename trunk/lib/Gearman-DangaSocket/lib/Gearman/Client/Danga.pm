@@ -119,7 +119,9 @@ sub add_task {
             # Task is not hashed, random job server
             $js = @job_servers[int( rand( @job_servers ))];
         }
+        # TODO Fix this violation of object privacy.
         $task->{taskset} = $self;
+
         $js->add_task( $task );
     }
     else {
