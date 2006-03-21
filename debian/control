@@ -35,33 +35,3 @@ Description: Supporting perl libraries for gearmand
  .
  This package provides supporting perl libraries for Gearman Server.
 
-Package: gearman-worker
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, libgearman-perl
-Description: Worker module for gearmand
- Gearman is an open-source, scalable, distributed job processing framework
- written in Perl. Jobs are submitted to one or more job servers where they are
- given to workers for execution. The system allows worker processes to run on
- any number of machines, which may have hardware specializations. Simple Client
- and Worker APIs support incremental status updates and parallel task
- completion. The system was designed to efficiently distribute expensive
- computations across a farm of workers in order to meet the asynchronous
- processing demands of LiveJournal.com.
- .
- This package provides the Gearman Worker.
-
-Package: gearman-client
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, libgearman-perl
-Description: Client module for gearmand
- Gearman is an open-source, scalable, distributed job processing framework
- written in Perl. Jobs are submitted to one or more job servers where they are
- given to workers for execution. The system allows worker processes to run on
- any number of machines, which may have hardware specializations. Simple Client
- and Worker APIs support incremental status updates and parallel task
- completion. The system was designed to efficiently distribute expensive
- computations across a farm of workers in order to meet the asynchronous
- processing demands of LiveJournal.com.
- .
- This package provides the Gearman Client.
-
