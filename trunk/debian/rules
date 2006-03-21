@@ -57,9 +57,6 @@ install-indep:
 	dh_installdirs -A
 	dh_install
 
-	install $(CURDIR)/t/worker.pl 	$(CURDIR)/debian/gearman-worker/usr/sbin/gearman-worker
-	install $(CURDIR)/dev/client.pl 	$(CURDIR)/debian/gearman-client/usr/bin/gearman-client
-
 # Must not depend on anything. This is to be called by
 # binary-arch/binary-indep
 # in another 'make' thread.
