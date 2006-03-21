@@ -1,3 +1,9 @@
+gearman (0.2-1) unstable; urgency=low
+
+  * Fix CPU spinning bug
+
+ -- Brad Fitzpatrick <brad@danga.com>  Mon, 20 Mar 2006 15:05:17 -0800
+
 gearman (0.1-1) unstable; urgency=low
 
   * Initial release.
