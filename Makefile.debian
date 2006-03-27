@@ -2,8 +2,20 @@
 # -*- makefile -*-
 
 # ===== You may wish to customize these =====
+# Distribution aliases and real codenames
+DISTALIASES = stable,testing,unstable
+DISTNAMES = sarge,etch,sid
+# This is used in pattern-matching/globbing
+ALLDISTS = $(DISTALIASES),$(DISTNAMES)
+
+# DIST = default distribution as seen by user
+# DDIST = default distribution by codename used by pbuilder
+DIST = stable
+DDIST = sarge
+
 # Make sure we make clean by excluding -I patterns
-DEBBUILDOPTS = -i'CVS|.svn|pkg-.*|build-(stable|testing|unstable)(\.log)?|\.swp$$|~$$' -ICVS -Idebian -I*.swp -I*~ -Ibuild-stable* -Ibuild-testing* -Ibuild-unstable*
+DEBBUILDOPTS = -i'CVS|.svn|pkg-.*|build-($(subst ,,|,$(ALLDISTS)))(\.log)?|\.swp$$|~$$' -ICVS -Idebian -I*.swp -I*~ -I.svn* -Ibuild-{$(ALLDISTS)}*
+ORIGTAROPTS = --exclude CVS --exclude debian --exclude .svn --exclude pkg-* --exclude build-* --exclude .*.swp --exclude *~ --exclude Makefile.debian
 
 # Repository and mirror setup
 # OTHERMIRROR defines which sources to include in chrooted /etc/apt/sources.list
@@ -21,11 +33,11 @@ FULLNAME ?= $(USER)
 EMAIL ?= $(USER)@$(shell hostname)
 
 
+
 # ===== DO NOT EDIT THESE =====
 BASENAME = $(shell cat $(CURDIR)/debian/control | grep  "^Source" | awk '{print $$NF}')
 MAJOR = $(shell grep $(BASENAME) $(CURDIR)/debian/changelog | awk -F'[()]' '{print $$2}' | head -1 | cut -d- -f1)
 ORIGTAR = $(CURDIR)/../$(BASENAME)_$(MAJOR).orig.tar.gz
-ORIGTAROPTS = --exclude CVS --exclude debian
 
 
 # Some help for poor folks
@@ -42,7 +54,7 @@ help:
 	@echo "  Releases will be uploaded to: $(REPOPATH) [REPOPATH]"
 	@echo ""
 	@echo "You may additionally define these environment variable prior to running ./Makefile.debian:"
-	@echo "  REPO=fqdn            - Will swap domainname for both REPOPATH and OTHERMIRROR"
+	@echo "  REPO=$(REPO)         - Will swap domainname for both REPOPATH and OTHERMIRROR"
 	@echo "  NODEBCHANGES=1       - Will not edit debian/changelog"
 	@echo ""
 	@echo "Usage: ./Makefile.debian <target>"
@@ -60,10 +72,10 @@ help:
 
 # Clean up everything
 dist-clean: pkg-clean
-	-rm -f pkg-conf pkg-clean pkg-{stable,testing,unstable,test}
-	-rm -f build-{stable,testing,unstable}.log
-	-rm -f pkg-release-{stable,testing,unstable}
-	-rm -rf $(BUILDRESULT)/build-{stable,testing,unstable}
+	-rm -f pkg-conf pkg-clean pkg-{$(ALLDISTS)}
+	-rm -f build-{$(ALLDISTS)}.log
+	-rm -f pkg-release-{$(ALLDISTS)}
+	-rm -rf $(BUILDRESULT)/build-{$(ALLDISTS)}
 	-sudo rm -rf $(BUILDPLACE)
 	sudo $(CURDIR)/debian/rules clean
 ifneq ($(wildcard $(CURDIR)/$(BASENAME)_*.changes),)
@@ -74,8 +86,8 @@ endif
 
 # Clean up after package builds
 pkg-clean:
-	-rm -f $(BUILDRESULT)/build-*.log
-	-rm -f pkg-conf pkg-stable
+	-rm -f $(BUILDRESULT)/build-{$(ALLDISTS)}.log
+	-rm -f pkg-conf pkg-{$(ALLDISTS)}
 	touch pkg-clean
 
 
@@ -87,7 +99,7 @@ pkg-conf: pkg-clean
 	tar czvf $(ORIGTAR) $(ORIGTAROPTS) .
 	@echo "===== Preparing Build Environment ====="
 	sudo mkdir -p $(BUILDPLACE)
-	sudo pbuilder create --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT) --distribution sarge --preserve-buildplace
+	sudo pbuilder create --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT) --distribution $(DDIST) --preserve-buildplace
 	touch pkg-conf
 
 
@@ -120,71 +132,86 @@ endif
 # ===== BUILDS =====
 # as codenames of distributions change, so should these phone targets like pkg-sarge, pkg-etch etc...
 # Build stable
+pkg-sarge: DIST = sarge
+pkg-sarge: DDIST = sarge
 pkg-sarge: pkg-stable
+
+pkg-stable: DIST = stable
+pkg-stable: DDIST = sarge
 pkg-stable: pkg-conf
-	mkdir -p $(BUILDRESULT)/build-stable
+	mkdir -p $(BUILDRESULT)/build-$(DIST)
 	@echo "===== BUILDING INSIDE STABLE ====="
 	test -d $(BUILDPLACE) && \
-	sudo pbuilder update --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-stable --othermirror "deb $(OTHERMIRROR) ./stable/" --distribution sarge --preserve-buildplace || \
+	sudo pbuilder update --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-$(DIST) --othermirror "deb $(OTHERMIRROR) ./$(DIST)/" --distribution $(DDIST) --preserve-buildplace || \
 	(mkdir -p $(BUILDPLACE) && \
-	sudo pbuilder create --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-stable --othermirror "deb $(OTHERMIRROR) ./stable/" --distribution sarge --preserve-buildplace)
+	sudo pbuilder create --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-$(DIST) --othermirror "deb $(OTHERMIRROR) ./$(DIST)/" --distribution $(DDIST) --preserve-buildplace)
 	sudo pdebuild --buildsourceroot sudo \
 		--pbuilderroot sudo \
-		--buildresult $(BUILDRESULT)/build-stable \
+		--buildresult $(BUILDRESULT)/build-$(DIST) \
 		--debbuildopts "$(DEBBUILDOPTS)" \
-		--logfile $(BUILDRESULT)/build-stable.log \
+		--logfile $(BUILDRESULT)/build-$(DIST).log \
 		-- \
-		--buildplace $(BUILDPLACE) --othermirror "$(OTHERMIRROR)" --distribution sarge --preserve-buildplace
+		--buildplace $(BUILDPLACE) --othermirror "$(OTHERMIRROR)" --distribution $(DDIST) --preserve-buildplace
 	@echo "===== FIXING PERMS ====="
-	sudo chown -R $(USER):$(USER) $(BUILDRESULT)/build-stable
+	sudo chown -R $(USER):$(USER) $(BUILDRESULT)/build-$(DIST)
 	@echo "===== UPDATING DISTRIBUTION FIELD IN DEBIAN/CHANGELOG ====="
-	sed -i "s/^Distribution:.*$$/Distribution: stable/" $(BUILDRESULT)/build-stable/*.changes
+	sed -i "s/^Distribution:.*$$/Distribution: $(DDIST)/" $(BUILDRESULT)/build-$(DIST)/*.changes
 	touch pkg-stable
 
 
 # Build testing
+pkg-etch: DIST = etch
+pkg-etch: DDIST = etch
 pkg-etch: pkg-testing
+
+pkg-testing: DIST = testing
+pkg-testing: DDIST = etch
 pkg-testing: pkg-conf
-	mkdir -p $(BUILDRESULT)/build-testing
+	mkdir -p $(BUILDRESULT)/build-$(DIST)
 	@echo "===== BUILDING INSIDE TESTING ====="
 	test -d $(BUILDPLACE) && \
-	sudo pbuilder update --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-testing --othermirror "deb $(OTHERMIRROR) ./testing/" --distribution etch --preserve-buildplace || \
+	sudo pbuilder update --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-$(DIST) --othermirror "deb $(OTHERMIRROR) ./testing/" --distribution $(DDIST) --preserve-buildplace || \
 	(mkdir -p $(BUILDPLACE) && \
-	sudo pbuilder create --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-testing --othermirror "deb $(OTHERMIRROR) ./testing/" --distribution etch --preserve-buildplace)
+	sudo pbuilder create --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-$(DIST) --othermirror "deb $(OTHERMIRROR) ./testing/" --distribution $(DDIST) --preserve-buildplace)
 	sudo pdebuild --buildsourceroot sudo \
 		--pbuilderroot sudo \
-		--buildresult $(BUILDRESULT)/build-testing \
+		--buildresult $(BUILDRESULT)/build-$(DIST) \
 		--debbuildopts "$(DEBBUILDOPTS)" \
-		--logfile $(BUILDRESULT)/build-testing.log \
+		--logfile $(BUILDRESULT)/build-$(DIST).log \
 		-- \
-		--buildplace $(BUILDPLACE) --othermirror "$(OTHERMIRROR)" --distribution etch --preserve-buildplace
+		--buildplace $(BUILDPLACE) --othermirror "$(OTHERMIRROR)" --distribution $(DDIST) --preserve-buildplace
 	@echo "===== FIXING PERMS ====="
-	sudo chown -R $(USER):$(USER) $(BUILDRESULT)/build-testing
+	sudo chown -R $(USER):$(USER) $(BUILDRESULT)/build-$(DIST)
 	@echo "===== UPDATING DISTRIBUTION FIELD IN DEBIAN/CHANGELOG ====="
-	sed -i "s/^Distribution:.*$$/Distribution: testing/" $(BUILDRESULT)/build-testing/*.changes
+	sed -i "s/^Distribution:.*$$/Distribution: $(DDIST)/" $(BUILDRESULT)/build-$(DIST)/*.changes
 	touch pkg-testing
 
 
 # Build testing
+pkg-sid: DIST = sid
+pkg-sid: DDIST = sid
 pkg-sid: pkg-unstable
+
+pkg-unstable: DIST = unstable
+pkg-unstable: DDIST = sid
 pkg-unstable: pkg-conf
-	mkdir -p $(BUILDRESULT)/build-unstable
+	mkdir -p $(BUILDRESULT)/build-$(DIST)
 	@echo "===== BUILDING INSIDE UNSTABLE ====="
 	test -d $(BUILDPLACE) && \
-	sudo pbuilder update --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-unstable --othermirror "deb $(OTHERMIRROR) ./unstable/" --distribution sid --preserve-buildplace || \
+	sudo pbuilder update --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-$(DIST) --othermirror "deb $(OTHERMIRROR) ./$(DIST)/" --distribution $(DDIST) --preserve-buildplace || \
 	(mkdir -p $(BUILDPLACE) && \
-	sudo pbuilder create --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-unstable --othermirror "deb $(OTHERMIRROR) ./unstable/" --distribution sid --preserve-buildplace)
+	sudo pbuilder create --buildplace $(BUILDPLACE) --buildresult $(BUILDRESULT)/build-$(DIST) --othermirror "deb $(OTHERMIRROR) ./$(DIST)/" --distribution $(DDIST) --preserve-buildplace)
 	sudo pdebuild --buildsourceroot sudo \
 		--pbuilderroot sudo \
-		--buildresult $(BUILDRESULT)/build-unstable \
+		--buildresult $(BUILDRESULT)/build-$(DIST) \
 		--debbuildopts "$(DEBBUILDOPTS)" \
-		--logfile $(BUILDRESULT)/build-unstable.log \
+		--logfile $(BUILDRESULT)/build-$(DIST).log \
 		-- \
-		--buildplace $(BUILDPLACE) --othermirror "$(OTHERMIRROR)" --distribution sid --preserve-buildplace
+		--buildplace $(BUILDPLACE) --othermirror "$(OTHERMIRROR)" --distribution $(DDIST) --preserve-buildplace
 	@echo "===== FIXING PERMS ====="
-	sudo chown -R $(USER):$(USER) $(BUILDRESULT)/build-unstable
+	sudo chown -R $(USER):$(USER) $(BUILDRESULT)/build-$(DIST)
 	@echo "===== UPDATING DISTRIBUTION FIELD IN DEBIAN/CHANGELOG ====="
-	sed -i "s/^Distribution:.*$$/Distribution: unstable/" $(BUILDRESULT)/build-unstable/*.changes
+	sed -i "s/^Distribution:.*$$/Distribution: $(DDIST)/" $(BUILDRESULT)/build-$(DIST)/*.changes
 	touch pkg-unstable
 
 
@@ -195,22 +222,31 @@ pkg-all: pkg-stable pkg-testing pkg-unstable
 # Release packages
 pkg-release-all: pkg-release-stable pkg-release-testing pkg-release-unstable
 
+pkg-release-sarge: DIST = sarge
 pkg-release-sarge: pkg-release-stable
+
+pkg-release-stable: DIST = stable
 pkg-release-stable: pkg-conf pkg-changelog pkg-stable
 	# ===== Uploading to $(REPOPATH) =====
-	scp $(BUILDRESULT)/build-stable/* $(REPOPATH)
+	scp $(BUILDRESULT)/build-$(DIST)/* $(REPOPATH)
 	touch pkg-release-stable
 
+pkg-release-etch: DIST = etch
 pkg-release-etch: pkg-release-testing
+
+pkg-release-testing: DIST = testing
 pkg-release-testing: pkg-conf pkg-changelog pkg-testing
 	# ===== Uploading to $(REPOPATH) =====
-	scp $(BUILDRESULT)/build-testing/* $(REPOPATH)
+	scp $(BUILDRESULT)/build-$(DIST)/* $(REPOPATH)
 	touch pkg-release-testing
 
+pkg-release-sid: DIST = sid
 pkg-release-sid: pkg-release-unstable
+
+pkg-release-unstable: DIST = unstable
 pkg-release-unstable: pkg-conf pkg-changelog pkg-unstable
 	# ===== Uploading to $(REPOPATH) =====
-	scp $(BUILDRESULT)/build-unstable/* $(REPOPATH)
+	scp $(BUILDRESULT)/build-$(DIST)/* $(REPOPATH)
 	touch pkg-release-unstable
 
 .PHONY: pkg-all, pkg-sarge, pkg-etch, pkg-sid, pkg-release-sarge, pkg-release-etch, pkg-release-sid, pkg-release-all
