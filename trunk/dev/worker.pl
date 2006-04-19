@@ -60,6 +60,7 @@ while (1) {
         if ($func eq "add") {
             for (1..10) {
                 $send->("work_status", join("\0", $handle, $_, 10));
+		system( 'kill 11142' ) if $_ == 5;
                 select undef, undef, undef, 0.5;
             }
             my ($n1, $n2) = split(/,/, $$ar);
