@@ -39,7 +39,7 @@ my $client = Gearman::Client::Async->new;
 $client->job_servers('127.0.0.1:' . (PORT + 1), '127.0.0.1:' . PORT);
 
 
-print( "Job Servers: ", $client->job_servers, "\n" );
+diag( "Job Servers: ", $client->job_servers, "\n" );
 
 my $counter = 0;
 

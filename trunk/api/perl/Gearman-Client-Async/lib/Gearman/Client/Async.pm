@@ -49,7 +49,7 @@ use vars qw($VERSION);
 
 $VERSION = "0.00_01";
 
-sub DEBUGGING () { 1 }
+sub DEBUGGING () { 0 }
 
 sub new {
     my ($class, %opts) = @_;
@@ -144,7 +144,7 @@ use Gearman::Util;
 
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
-sub DEBUGGING () { 1 }
+sub DEBUGGING () { 0 }
 
 sub new {
     my Gearman::Client::Async::Connection $self = shift;
