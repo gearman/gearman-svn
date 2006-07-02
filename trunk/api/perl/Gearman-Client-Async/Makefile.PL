@@ -6,6 +6,8 @@ WriteMakefile(
     VERSION_FROM => 'lib/Gearman/Client/Danga.pm', # finds $VERSION
     PREREQ_PM    => {
                      'Test::Simple' => 0.44,
+                     Danga::Socket  => 1.51,
+
                     },
     ( $] >= 5.005 ?
       (
