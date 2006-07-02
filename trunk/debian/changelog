@@ -1,4 +1,10 @@
-gearman (0.30-1) unstable; urgency=low
+gearman (1.00-1) unstable; urgency=low
+
+  * rearranging for CPAN upload
+
+ -- Brad Fitzpatrick <brad@danga.com>  Sun,  2 Jul 2006 05:39:28 +0000
+
+gearman (0.30-1) unstable; urgency=medium
 
   * Fix memory leak.
 
