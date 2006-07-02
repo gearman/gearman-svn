@@ -3,8 +3,7 @@ use ExtUtils::MakeMaker;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile(
-              'NAME'=> 'gearman-all',
-              'VERSION' => '1.00',
+              'NAME'=> 'gearman-build-api',
               AUTHOR     => 'Brad Fitzpatrick <brad@danga.com>',
               );
 
