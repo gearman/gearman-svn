@@ -1,18 +1,18 @@
 #TODO: fail_after_idle
 #TODO: find out what fail_after_idle means in this context
 
-package Gearman::Client::Danga;
+package Gearman::Client::Async;
 
 =head1 NAME
 
-Gearman::Client::Danga - Asynchronous client module for Gearman
+Gearman::Client::Async - Asynchronous client module for Gearman for Danga::Socket servers
 
 =head1 SYNOPSIS
 
-    use Gearman::Client::Danga;
+    use Gearman::Client::Async;
 
-    # Instantiate a new Gearman::Client::Danga object.
-    $client = Gearman::Client::Danga->new(
+    # Instantiate a new Gearman::Client::Async object.
+    $client = Gearman::Client::Async->new(
         job_servers => [ '127.0.0.1', '192.168.0.1:123' ],
     );
 
@@ -66,7 +66,7 @@ sub new {
 
 # getter/setter
 sub job_servers {
-    my Gearman::Client::Danga $self = shift;
+    my Gearman::Client::Async $self = shift;
 
     my $job_servers = $self->{job_servers};
 
@@ -77,7 +77,7 @@ sub job_servers {
         @$job_servers = ();
 
         foreach (@_) {
-            my $server = Gearman::Client::Danga::Connection->new( hostspec => $_ );
+            my $server = Gearman::Client::Async::Connection->new( hostspec => $_ );
             if ($server) {
                 push @$job_servers, $server;
             }
@@ -86,7 +86,7 @@ sub job_servers {
             }
         }
     }
-    
+
     my @list = map {$_->hostspec} @$job_servers unless @_;
 
     return @list if wantarray;
@@ -94,15 +94,15 @@ sub job_servers {
 }
 
 sub shutdown {
-    my Gearman::Client::Danga $self = shift;
-    
+    my Gearman::Client::Async $self = shift;
+
     foreach (@{$self->{job_servers}}) {
         $_->close( "Shutdown" );
     }
 }
 
 sub add_task {
-    my Gearman::Client::Danga $self = shift;
+    my Gearman::Client::Async $self = shift;
     my Gearman::Task $task = shift;
 
     my @job_servers = grep { $_->safe } @{$self->{job_servers}};
@@ -126,11 +126,11 @@ sub add_task {
     }
     else {
         $task->fail;
-    }    
+    }
 }
 
 
-package Gearman::Client::Danga::Connection;
+package Gearman::Client::Async::Connection;
 
 use strict;
 use warnings;
@@ -147,14 +147,14 @@ use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 sub DEBUGGING () { 1 }
 
 sub new {
-    my Gearman::Client::Danga::Connection $self = shift;
-    
+    my Gearman::Client::Async::Connection $self = shift;
+
     my %opts = @_;
 
     $self = fields::new( $self ) unless ref $self;
 
     $self->{hostspec} = delete( $opts{hostspec} ) or return;
-    
+
     $self->{state} = 'disconnected';
     $self->{waiting} = {};
     $self->{need_handle} = [];
@@ -165,13 +165,13 @@ sub new {
 }
 
 sub hostspec {
-    my Gearman::Client::Danga::Connection $self = shift;
+    my Gearman::Client::Async::Connection $self = shift;
 
     return $self->{hostspec};
 }
 
 sub connect {
-    my Gearman::Client::Danga::Connection $self = shift;
+    my Gearman::Client::Async::Connection $self = shift;
 
     $self->{state} = 'connecting';
 
@@ -190,14 +190,14 @@ sub connect {
 
     connect $sock, Socket::sockaddr_in( $port, Socket::inet_aton( $host ) );
 
-    $self->{parser} = Gearman::ResponseParser::Danga->new( $self );
+    $self->{parser} = Gearman::ResponseParser::Async->new( $self );
 
     $self->watch_write( 1 );
     $self->watch_read( 1 );
 }
 
 sub event_write {
-    my Gearman::Client::Danga::Connection $self = shift;
+    my Gearman::Client::Async::Connection $self = shift;
 
     if ($self->{state} eq 'connecting') {
         $self->{state} = 'ready';
@@ -211,12 +211,12 @@ sub event_write {
         push @{$self->{need_handle}}, $task;
         return;
     }
-    
+
     $self->watch_write( 0 );
 }
 
 sub event_read {
-    my Gearman::Client::Danga::Connection $self = shift;
+    my Gearman::Client::Async::Connection $self = shift;
 
     my $input = $self->read( 128 * 1024 );
 
@@ -229,7 +229,7 @@ sub event_read {
 }
 
 sub event_err {
-    my Gearman::Client::Danga::Connection $self = shift;
+    my Gearman::Client::Async::Connection $self = shift;
 
     if (DEBUGGING and $self->{state} eq 'connecting') {
         warn "Jobserver, $self->{hostspec} ($self) has failed to connect properly\n";
@@ -240,31 +240,31 @@ sub event_err {
 }
 
 sub close {
-    my Gearman::Client::Danga::Connection $self = shift;
+    my Gearman::Client::Async::Connection $self = shift;
     my $reason = shift;
 
     if ($self->{state} ne 'disconnected') {
         $self->{state} = 'disconnected';
         $self->SUPER::close( $reason );
     }
-    
+
     $self->_requeue_all;
 }
 
 sub mark_unsafe {
-    my Gearman::Client::Danga::Connection $self = shift;
+    my Gearman::Client::Async::Connection $self = shift;
 
     $self->{deadtime} = time + 10;
 }
 
 sub safe {
-    my Gearman::Client::Danga::Connection $self = shift;
-    
+    my Gearman::Client::Async::Connection $self = shift;
+
     return $self->{deadtime} <= time;
 }
 
 sub add_task {
-    my Gearman::Client::Danga::Connection $self = shift;
+    my Gearman::Client::Async::Connection $self = shift;
     my Gearman::Task $task = shift;
 
     if ($self->{state} eq 'disconnected') {
@@ -277,8 +277,8 @@ sub add_task {
 }
 
 sub _requeue_all {
-    my Gearman::Client::Danga::Connection $self = shift;
-    
+    my Gearman::Client::Async::Connection $self = shift;
+
     my $to_send = $self->{to_send};
     my $need_handle = $self->{need_handle};
     my $waiting = $self->{waiting};
@@ -286,7 +286,7 @@ sub _requeue_all {
     $self->{to_send} = [];
     $self->{need_handle} = [];
     $self->{waiting} = {};
-    
+
     while (@$to_send) {
         my $task = shift @$to_send;
         warn "Task $task in to_send queue during socket error, queueing for redispatch\n" if DEBUGGING;
@@ -306,7 +306,7 @@ sub _requeue_all {
 }
 
 sub process_packet {
-    my Gearman::Client::Danga::Connection $self = shift;
+    my Gearman::Client::Async::Connection $self = shift;
     my $res = shift;
 
     if ($res->{type} eq "job_created") {
@@ -373,7 +373,7 @@ sub process_packet {
 
 # note the failure of a task given by its jobserver-specific handle
 sub _fail_jshandle {
-    my Gearman::Client::Danga::Connection $self = shift;
+    my Gearman::Client::Async::Connection $self = shift;
     my $shandle = shift;
 
     my $task_list = $self->{waiting}->{$shandle} or
@@ -386,7 +386,7 @@ sub _fail_jshandle {
     delete $self->{waiting}{$shandle} unless @$task_list;
 }
 
-package Gearman::ResponseParser::Danga;
+package Gearman::ResponseParser::Async;
 
 use strict;
 use warnings;
@@ -413,7 +413,7 @@ sub on_packet {
 
 sub on_error {
     my $self = shift;
-    
+
     $self->{_client}->mark_unsafe;
     $self->{_client}->close;
 }
