@@ -122,6 +122,8 @@ sub event_err {
 
     if (DEBUGGING and $self->{state} == S_CONNECTING) {
         warn "Jobserver, $self->{hostspec} ($self) has failed to connect properly\n";
+        # FIXME: $task->fail on pending bogus tasks
+        # TODOTEST: add test
     }
 
     $self->mark_dead;
