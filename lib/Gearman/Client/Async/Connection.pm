@@ -105,13 +105,12 @@ sub event_read {
     my Gearman::Client::Async::Connection $self = shift;
 
     my $input = $self->read( 128 * 1024 );
-
-    if ($input) {
-        $self->{parser}->parse_data( $input );
-    }
-    else {
+    unless (defined $input) {
         $self->close( "EOF" );
+        return;
     }
+
+    $self->{parser}->parse_data( $input );
 }
 
 sub event_err {
@@ -266,6 +265,7 @@ sub _fail_jshandle {
     my Gearman::Task $task = shift @$task_list or
         die "Uhhhh:  task_list is empty on work_fail for handle $shandle\n";
 
+    # FIXME: flip these two lines?
     $task->fail;
     delete $self->{waiting}{$shandle} unless @$task_list;
 }
