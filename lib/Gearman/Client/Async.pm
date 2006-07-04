@@ -31,9 +31,6 @@ Gearman::Client::Async - Asynchronous client module for Gearman for Danga::Socke
 
 use strict;
 use warnings;
-
-use IO::Handle;
-use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET);
 use Carp qw(croak);
 
 use fields (
@@ -104,25 +101,25 @@ sub add_task {
     my @job_servers = grep { $_->alive } @{$self->{job_servers}};
 
     warn "Alive servers: " . @job_servers . " out of " . @{$self->{job_servers}} . "\n" if DEBUGGING;
+    unless (@job_servers) {
+        $task->fail;
+        return;
+    }
 
-    if (@job_servers) {
-        my $js;
-        if (defined( my $hash = $task->hash )) {
-            # Task is hashed, use key to fetch job server
-            $js = @job_servers[$hash % @job_servers];
-        }
-        else {
-            # Task is not hashed, random job server
-            $js = @job_servers[int( rand( @job_servers ))];
-        }
-        # TODO Fix this violation of object privacy.
-        $task->{taskset} = $self;
-
-        $js->add_task( $task );
+    my $js;
+    if (defined( my $hash = $task->hash )) {
+        # Task is hashed, use key to fetch job server
+        $js = @job_servers[$hash % @job_servers];
     }
     else {
-        $task->fail;
+        # Task is not hashed, random job server
+        $js = @job_servers[int( rand( @job_servers ))];
     }
+
+    # TODO Fix this violation of object privacy.
+    $task->{taskset} = $self;
+
+    $js->add_task( $task );
 }
 
 1;

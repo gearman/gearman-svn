@@ -17,7 +17,8 @@ use fields (
 use Gearman::Task;
 use Gearman::Util;
 
-use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
+use IO::Handle;
+use Socket qw(PF_INET IPPROTO_TCP TCP_NODELAY SOL_SOCKET SOCK_STREAM);
 
 sub DEBUGGING () { 1 }
 
