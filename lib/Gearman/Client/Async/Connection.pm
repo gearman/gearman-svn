@@ -5,14 +5,14 @@ use warnings;
 use Danga::Socket;
 use base 'Danga::Socket';
 use fields (
-            'state',
-            'waiting',
+            'state',       # one of 3 state constants below
+            'waiting',     # hashref of $handle -> [ Task+ ]
             'need_handle', # arrayref of Gearman::Task objects which
                            # have been submitted but need handles.
-            'parser',
-            'hostspec',   # scalar: "host:ip"
-            'to_send',
-            'deadtime',
+            'parser',      # parser object
+            'hostspec',    # scalar: "host:ip"
+            'to_send',     # arrayref of Task objects to send when we get connected
+            'deadtime',    # unixtime we're marked dead until.
             );
 
 use constant S_DISCONNECTED => \ "disconnected";
@@ -158,9 +158,8 @@ sub add_task {
         $self->connect;
     }
 
-    $self->watch_write( 1 );
-
     push @{$self->{to_send}}, $task;
+    $self->watch_write( 1 );
 }
 
 sub _requeue_all {
