@@ -34,7 +34,7 @@ my $retried = 0;
 Danga::Socket->AddTimer(3.0, sub { $done = 1; });
 
 $client->add_task( Gearman::Task->new( "sleep_for" => \ "2", {
-    fail_after_idle => 1.0,
+    timeout => 1.0,
     retry_count => 5,
     on_status => sub {
         $gotstatus++;
