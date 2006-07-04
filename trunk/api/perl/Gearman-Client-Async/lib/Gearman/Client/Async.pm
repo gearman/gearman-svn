@@ -34,7 +34,7 @@ use warnings;
 use Carp qw(croak);
 
 use fields (
-            'job_servers',   # arrayref of
+            'job_servers',   # arrayref of Gearman::Client::Async::Connection objects
             );
 
 use Gearman::Objects;

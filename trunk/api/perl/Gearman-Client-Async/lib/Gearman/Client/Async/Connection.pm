@@ -19,6 +19,7 @@ use constant S_DISCONNECTED => \ "disconnected";
 use constant S_CONNECTING   => \ "connecting";
 use constant S_READY        => \ "ready";
 
+use Carp qw(croak);
 use Gearman::Task;
 use Gearman::Util;
 
