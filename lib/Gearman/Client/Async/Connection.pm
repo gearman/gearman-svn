@@ -9,7 +9,7 @@ use fields (
             'waiting',
             'need_handle',
             'parser',
-            'hostspec',
+            'hostspec',   # scalar: "host:ip"
             'to_send',
             'deadtime',
             );
@@ -37,6 +37,11 @@ sub new {
     $self->{deadtime} = 0;
 
     return $self;
+}
+
+sub close_when_finished {
+    my Gearman::Client::Async::Connection $self = shift;
+    # FIXME: implement
 }
 
 sub hostspec {

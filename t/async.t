@@ -36,7 +36,7 @@ start_worker(PORT, 2);
 start_worker(PORT, 2);
 
 my $client = Gearman::Client::Async->new;
-$client->job_servers('127.0.0.1:' . (PORT + 1), '127.0.0.1:' . PORT);
+$client->set_job_servers('127.0.0.1:' . (PORT + 1), '127.0.0.1:' . PORT);
 
 
 diag( "Job Servers: ", $client->job_servers, "\n" );
@@ -86,13 +86,12 @@ sub add_timer {
     Danga::Socket->AddTimer( .4, sub {
 
         if ($counter >= 2) {
-            $client->shutdown();
             Danga::Socket->AddTimer( 1, sub {  exit;  } );
         }
         else {
             add_timer();
         }
-#            print "WatchedSockets: " . Dumper(Danga::Socket->DescriptorMap()) . "\n";
+        #print "WatchedSockets: " . Dumper(Danga::Socket->DescriptorMap()) . "\n";
     } );
   }
 
