@@ -7,7 +7,8 @@ use base 'Danga::Socket';
 use fields (
             'state',
             'waiting',
-            'need_handle',
+            'need_handle', # arrayref of Gearman::Task objects which
+                           # have been submitted but need handles.
             'parser',
             'hostspec',   # scalar: "host:ip"
             'to_send',
@@ -33,14 +34,16 @@ sub new {
 
     $self = fields::new( $self ) unless ref $self;
 
-    $self->{hostspec} = delete( $opts{hostspec} ) or return;
+    $self->{hostspec}    = delete( $opts{hostspec} ) or
+        croak("hostspec required");
 
-    $self->{state} = S_DISCONNECTED;
-    $self->{waiting} = {};
+    $self->{state}       = S_DISCONNECTED;
+    $self->{waiting}     = {};
     $self->{need_handle} = [];
-    $self->{to_send} = [];
-    $self->{deadtime} = 0;
+    $self->{to_send}     = [];
+    $self->{deadtime}    = 0;
 
+    croak "Unknown parameters: " . join(", ", keys %opts) if %opts;
     return $self;
 }
 
