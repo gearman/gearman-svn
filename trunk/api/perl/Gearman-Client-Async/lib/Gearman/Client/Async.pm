@@ -119,6 +119,13 @@ sub add_task {
     # TODO Fix this violation of object privacy.
     $task->{taskset} = $self;
 
+    if (my $timeout = $task->{fail_after_idle}) {
+        Danga::Socket->AddTimer($timeout, sub {
+            return if $task->is_finished;
+            $task->final_fail;
+        });
+    }
+
     $js->add_task( $task );
 }
 
