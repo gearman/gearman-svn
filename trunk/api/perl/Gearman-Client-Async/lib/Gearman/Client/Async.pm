@@ -17,7 +17,7 @@ Gearman::Client::Async - Asynchronous client module for Gearman for Danga::Socke
     );
 
     # Overwrite job server list with a new one.
-    $client->job_servers( '10.0.0.1' );
+    $client->set_job_servers( '10.0.0.1' );
 
     # Read list of job servers out of the client.
     $arrayref = $client->job_servers;
@@ -27,11 +27,6 @@ Gearman::Client::Async - Asynchronous client module for Gearman for Danga::Socke
     $task = Gearman::Task->new(...); # with callbacks, etc
     $client->add_task( $task );
 
-    # Shutdown all job server connections, so we can destruct.
-    $client->shutdown;
-
-    # Better examples forthcoming, see tests or something.
-
 =cut
 
 use strict;
@@ -39,8 +34,11 @@ use warnings;
 
 use IO::Handle;
 use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET);
+use Carp qw(croak);
 
-use fields qw(job_servers);
+use fields (
+            'job_servers',   # arrayref of
+            );
 
 use Gearman::Objects;
 use Gearman::Task;
@@ -60,47 +58,43 @@ sub new {
 
     $self->{job_servers} = [];
 
-    $self->job_servers(@{ $opts{job_servers} })
-        if $opts{job_servers};
+    my $js = delete $opts{job_servers};
+    $self->set_job_servers(@$js) if $js;
 
+    croak "Unknown parameters: " . join(", ", keys %opts) if %opts;
     return $self;
 }
 
-# getter/setter
-sub job_servers {
+# set job servers, without shutting down dups, and shutting down old ones gracefully
+sub set_job_servers {
     my Gearman::Client::Async $self = shift;
 
-    my $job_servers = $self->{job_servers};
+    my %being_set; # hostspec -> 1
+    %being_set = map { $_, 1 } @_;
 
-    if (@_) {
-        # Maybe we shouldn't do this, then existing tasks can finish and the connection will close on its own?
-        $self->shutdown;
-
-        @$job_servers = ();
-
-        foreach (@_) {
-            my $server = Gearman::Client::Async::Connection->new( hostspec => $_ );
-            if ($server) {
-                push @$job_servers, $server;
-            }
-            else {
-                warn "Job Server '$_' failed to initialize, bad hostspec?\n";
-            }
+    my %exist;   # hostspec -> existing conn
+    foreach my $econn (@{ $self->{job_servers} }) {
+        my $spec = $econn->hostspec;
+        if ($being_set{$spec}) {
+            $exist{$spec} = $econn;
+        } else {
+            $econn->close_when_finished;
         }
     }
 
-    my @list = map {$_->hostspec} @$job_servers unless @_;
-
-    return @list if wantarray;
-    return [@list];
+    my @newlist;
+    foreach (@_) {
+        push @newlist, $exist{$_} || Gearman::Client::Async::Connection->new( hostspec => $_ );
+    }
+    $self->{job_servers} = \@newlist;
 }
 
-sub shutdown {
+# getter
+sub job_servers {
     my Gearman::Client::Async $self = shift;
-
-    foreach (@{$self->{job_servers}}) {
-        $_->close( "Shutdown" );
-    }
+    croak "Not a setter" if @_;
+    my @list = map { $_->hostspec } @{ $self->{job_servers} };
+    return wantarray ? @list : \@list;
 }
 
 sub add_task {
