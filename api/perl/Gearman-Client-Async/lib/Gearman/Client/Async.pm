@@ -107,9 +107,9 @@ sub add_task {
     my Gearman::Client::Async $self = shift;
     my Gearman::Task $task = shift;
 
-    my @job_servers = grep { $_->safe } @{$self->{job_servers}};
+    my @job_servers = grep { $_->alive } @{$self->{job_servers}};
 
-    warn "Safe servers: " . @job_servers . " out of " . @{$self->{job_servers}} . "\n" if DEBUGGING;
+    warn "Alive servers: " . @job_servers . " out of " . @{$self->{job_servers}} . "\n" if DEBUGGING;
 
     if (@job_servers) {
         my $js;

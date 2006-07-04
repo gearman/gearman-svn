@@ -110,7 +110,7 @@ sub event_err {
         warn "Jobserver, $self->{hostspec} ($self) has failed to connect properly\n";
     }
 
-    $self->mark_unsafe;
+    $self->mark_dead;
     $self->close( "error" );
 }
 
@@ -126,15 +126,13 @@ sub close {
     $self->_requeue_all;
 }
 
-sub mark_unsafe {
+sub mark_dead {
     my Gearman::Client::Async::Connection $self = shift;
-
     $self->{deadtime} = time + 10;
 }
 
-sub safe {
+sub alive {
     my Gearman::Client::Async::Connection $self = shift;
-
     return $self->{deadtime} <= time;
 }
 
