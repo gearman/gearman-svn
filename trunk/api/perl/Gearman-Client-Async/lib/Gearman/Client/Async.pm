@@ -1,6 +1,3 @@
-#TODO: fail_after_idle
-#TODO: find out what fail_after_idle means in this context
-
 package Gearman::Client::Async;
 
 =head1 NAME
@@ -119,7 +116,7 @@ sub add_task {
     # TODO Fix this violation of object privacy.
     $task->{taskset} = $self;
 
-    if (my $timeout = $task->{fail_after_idle}) {
+    if (my $timeout = $task->{timeout}) {
         Danga::Socket->AddTimer($timeout, sub {
             return if $task->is_finished;
             $task->final_fail;
