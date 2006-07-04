@@ -14,6 +14,10 @@ use fields (
             'deadtime',
             );
 
+use constant S_DISCONNECTED => \ "disconnected";
+use constant S_CONNECTING   => \ "connecting";
+use constant S_READY        => \ "ready";
+
 use Gearman::Task;
 use Gearman::Util;
 
@@ -31,7 +35,7 @@ sub new {
 
     $self->{hostspec} = delete( $opts{hostspec} ) or return;
 
-    $self->{state} = 'disconnected';
+    $self->{state} = S_DISCONNECTED;
     $self->{waiting} = {};
     $self->{need_handle} = [];
     $self->{to_send} = [];
@@ -54,13 +58,14 @@ sub hostspec {
 sub connect {
     my Gearman::Client::Async::Connection $self = shift;
 
-    $self->{state} = 'connecting';
+    $self->{state} = S_CONNECTING;
 
     my ($host, $port) = split /:/, $self->{hostspec};
     $port ||= 7003;
 
     socket my $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
     IO::Handle::blocking($sock, 0);
+    setsockopt($sock, IPPROTO_TCP, TCP_NODELAY, pack("l", 1)) or die;
 
     unless ($sock && defined fileno($sock)) {
         warn( "Error creating socket: $!\n" );
@@ -80,13 +85,13 @@ sub connect {
 sub event_write {
     my Gearman::Client::Async::Connection $self = shift;
 
-    if ($self->{state} eq 'connecting') {
-        $self->{state} = 'ready';
+    if ($self->{state} == S_CONNECTING) {
+        $self->{state} = S_READY;
     }
 
     my $tasks = $self->{to_send};
 
-    if (@$tasks and $self->{state} eq 'ready') {
+    if (@$tasks and $self->{state} == S_READY) {
         my $task = shift @$tasks;
         $self->write( $task->pack_submit_packet );
         push @{$self->{need_handle}}, $task;
@@ -112,7 +117,7 @@ sub event_read {
 sub event_err {
     my Gearman::Client::Async::Connection $self = shift;
 
-    if (DEBUGGING and $self->{state} eq 'connecting') {
+    if (DEBUGGING and $self->{state} == S_CONNECTING) {
         warn "Jobserver, $self->{hostspec} ($self) has failed to connect properly\n";
     }
 
@@ -124,8 +129,8 @@ sub close {
     my Gearman::Client::Async::Connection $self = shift;
     my $reason = shift;
 
-    if ($self->{state} ne 'disconnected') {
-        $self->{state} = 'disconnected';
+    if ($self->{state} != S_DISCONNECTED) {
+        $self->{state} = S_DISCONNECTED;
         $self->SUPER::close( $reason );
     }
 
@@ -146,7 +151,7 @@ sub add_task {
     my Gearman::Client::Async::Connection $self = shift;
     my Gearman::Task $task = shift;
 
-    if ($self->{state} eq 'disconnected') {
+    if ($self->{state} == S_DISCONNECTED) {
         $self->connect;
     }
 
@@ -195,7 +200,7 @@ sub process_packet {
         my $shandle = ${ $res->{'blobref'} };
 
         # did sock become disconnected in the meantime?
-        if ($self->{state} ne 'ready') {
+        if ($self->{state} != S_READY) {
             $self->_fail_jshandle($shandle);
             return 1;
         }
