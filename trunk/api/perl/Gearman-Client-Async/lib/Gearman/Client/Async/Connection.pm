@@ -11,8 +11,9 @@ use fields (
                            # have been submitted but need handles.
             'parser',      # parser object
             'hostspec',    # scalar: "host:ip"
-            'to_send',     # arrayref of Task objects to send when we get connected
             'deadtime',    # unixtime we're marked dead until.
+            'on_ready',    # arrayref of on_ready callbacks to run on connect success
+            'on_error',    # arrayref of on_error callbacks to run on connect failure
             );
 
 use constant S_DISCONNECTED => \ "disconnected";
@@ -41,8 +42,9 @@ sub new {
     $self->{state}       = S_DISCONNECTED;
     $self->{waiting}     = {};
     $self->{need_handle} = [];
-    $self->{to_send}     = [];
     $self->{deadtime}    = 0;
+    $self->{on_ready}    = [];
+    $self->{on_error}    = [];
 
     croak "Unknown parameters: " . join(", ", keys %opts) if %opts;
     return $self;
@@ -80,10 +82,14 @@ sub connect {
 
     connect $sock, Socket::sockaddr_in( $port, Socket::inet_aton( $host ) );
 
+    Danga::Socket->AddTimer(0.25, sub {
+        return unless $self->{state} == S_CONNECTING;
+        $self->event_err;  # fake a connection error. took too long, people are waiting.
+    });
+
     $self->{parser} = Gearman::ResponseParser::Async->new( $self );
 
-    $self->watch_write( 1 );
-    $self->watch_read( 1 );
+    $self->watch_write(1);
 }
 
 sub event_write {
@@ -91,18 +97,12 @@ sub event_write {
 
     if ($self->{state} == S_CONNECTING) {
         $self->{state} = S_READY;
+        $self->watch_read(1);
+        $_->() foreach @{$self->{on_ready}};
+        $self->{on_ready} = [];
     }
 
-    my $tasks = $self->{to_send};
-
-    if (@$tasks and $self->{state} == S_READY) {
-        my $task = shift @$tasks;
-        $self->write( $task->pack_submit_packet );
-        push @{$self->{need_handle}}, $task;
-        return;
-    }
-
-    $self->watch_write( 0 );
+    $self->watch_write(0) if $self->write(undef);
 }
 
 sub event_read {
@@ -120,14 +120,18 @@ sub event_read {
 sub event_err {
     my Gearman::Client::Async::Connection $self = shift;
 
-    if (DEBUGGING and $self->{state} == S_CONNECTING) {
-        warn "Jobserver, $self->{hostspec} ($self) has failed to connect properly\n";
-        # FIXME: $task->fail on pending bogus tasks
-        # TODOTEST: add test
-    }
+    my $was_connecting = ($self->{state} == S_CONNECTING);
 
     $self->mark_dead;
     $self->close( "error" );
+
+    if ($was_connecting) {
+        warn "Jobserver, $self->{hostspec} ($self) has failed to connect properly\n" if DEBUGGING;
+        $_->() foreach @{$self->{on_error}};
+        $self->{on_error} = [];
+        return;
+        # TODOTEST: add test
+    }
 }
 
 sub close {
@@ -156,30 +160,21 @@ sub add_task {
     my Gearman::Client::Async::Connection $self = shift;
     my Gearman::Task $task = shift;
 
-    if ($self->{state} == S_DISCONNECTED) {
-        $self->connect;
-    }
+    Carp::confess("add_task called when in wrong state")
+        unless $self->{state} == S_READY;
 
-    push @{$self->{to_send}}, $task;
-    $self->watch_write( 1 );
+    $self->write( $task->pack_submit_packet );
+    push @{$self->{need_handle}}, $task;
 }
 
 sub _requeue_all {
     my Gearman::Client::Async::Connection $self = shift;
 
-    my $to_send = $self->{to_send};
     my $need_handle = $self->{need_handle};
     my $waiting = $self->{waiting};
 
-    $self->{to_send} = [];
     $self->{need_handle} = [];
-    $self->{waiting} = {};
-
-    while (@$to_send) {
-        my $task = shift @$to_send;
-        warn "Task $task in to_send queue during socket error, queueing for redispatch\n" if DEBUGGING;
-        $task->fail;
-    }
+    $self->{waiting}     = {};
 
     while (@$need_handle) {
         my $task = shift @$need_handle;
@@ -275,6 +270,19 @@ sub _fail_jshandle {
     delete $self->{waiting}{$shandle} unless @$task_list;
 }
 
+sub get_in_ready_state {
+    my ($self, $on_ready, $on_error) = @_;
+
+    if ($self->{state} == S_READY) {
+        $on_ready->();
+        return;
+    }
+
+    push @{$self->{on_ready}}, $on_ready if $on_ready;
+    push @{$self->{on_error}}, $on_error if $on_error;
+
+    $self->connect if $self->{state} == S_DISCONNECTED;
+}
 
 package Gearman::ResponseParser::Async;
 
@@ -307,6 +315,5 @@ sub on_error {
     $self->{_conn}->mark_unsafe;
     $self->{_conn}->close;
 }
-
 
 1;

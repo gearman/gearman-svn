@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# tests inserting a job into a dead jobserver.
+# connect to one js, submit job, no reply in 'timeout' seconds, fail, job then succeeds right after, ignore it
 #
 
 use strict;
