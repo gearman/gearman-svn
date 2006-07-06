@@ -230,13 +230,6 @@ sub process_packet {
             die "Um, got an unexpected job_created notification";
 
         my $shandle = ${ $res->{'blobref'} };
-
-        # did sock become disconnected in the meantime?
-        if ($self->{state} != S_READY) {
-            $self->_fail_jshandle($shandle);
-            return 1;
-        }
-
         push @{ $self->{waiting}->{$shandle} ||= [] }, $task;
         return 1;
     }
@@ -272,10 +265,6 @@ sub process_packet {
         my $task_list = $self->{waiting}{$shandle} or
             die "Uhhhh:  got work_status for unknown handle: $shandle\n";
 
-        # FIXME: the server is (probably) sending a work_status packet for each
-        # interested client, even if the clients are the same, so probably need
-        # to fix the server not to do that.  just put this FIXME here for now,
-        # though really it's a server issue.
         foreach my Gearman::Task $task (@$task_list) {
             $task->status($nu, $de);
         }
@@ -298,9 +287,8 @@ sub _fail_jshandle {
     my Gearman::Task $task = shift @$task_list or
         die "Uhhhh:  task_list is empty on work_fail for handle $shandle\n";
 
-    # FIXME: flip these two lines?
-    $task->fail;
     delete $self->{waiting}{$shandle} unless @$task_list;
+    $task->fail;
 }
 
 sub get_in_ready_state {
