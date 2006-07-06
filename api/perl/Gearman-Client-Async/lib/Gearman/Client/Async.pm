@@ -95,35 +95,47 @@ sub add_task {
     my Gearman::Client::Async $self = shift;
     my Gearman::Task $task = shift;
 
-    my @job_servers = grep { $_->alive } @{$self->{job_servers}};
+    my $try_again;
+    $try_again = sub {
 
-    warn "Alive servers: " . @job_servers . " out of " . @{$self->{job_servers}} . "\n" if DEBUGGING;
-    unless (@job_servers) {
-        $task->fail;
-        return;
-    }
-
-    my $js;
-    if (defined( my $hash = $task->hash )) {
-        # Task is hashed, use key to fetch job server
-        $js = @job_servers[$hash % @job_servers];
-    }
-    else {
-        # Task is not hashed, random job server
-        $js = @job_servers[int( rand( @job_servers ))];
-    }
-
-    # TODO Fix this violation of object privacy.
-    $task->{taskset} = $self;
-
-    if (my $timeout = $task->{timeout}) {
-        Danga::Socket->AddTimer($timeout, sub {
-            return if $task->is_finished;
+        my @job_servers = grep { $_->alive } @{$self->{job_servers}};
+        warn "Alive servers: " . @job_servers . " out of " . @{$self->{job_servers}} . "\n" if DEBUGGING;
+        unless (@job_servers) {
             $task->final_fail;
-        });
-    }
+            $try_again = undef;
+            return;
+        }
 
-    $js->add_task( $task );
+        my $js;
+        if (defined( my $hash = $task->hash )) {
+            # Task is hashed, use key to fetch job server
+            $js = @job_servers[$hash % @job_servers];
+        }
+        else {
+            # Task is not hashed, random job server
+            $js = @job_servers[int( rand( @job_servers ))];
+        }
+
+        # TODO Fix this violation of object privacy.
+        $task->{taskset} = $self;
+
+        $js->get_in_ready_state(
+                                # on_ready:
+                                sub {
+                                    if (my $timeout = $task->{timeout}) {
+                                        Danga::Socket->AddTimer($timeout, sub {
+                                            return if $task->is_finished;
+                                            $task->final_fail;
+                                        });
+                                    }
+                                    $js->add_task( $task );
+                                    $try_again = undef;
+                                },
+                                # on_error:
+                                $try_again,
+                                );
+    };
+    $try_again->();
 }
 
 1;
