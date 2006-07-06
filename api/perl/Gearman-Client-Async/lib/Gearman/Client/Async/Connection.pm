@@ -72,6 +72,8 @@ sub connect {
     my ($host, $port) = split /:/, $self->{hostspec};
     $port ||= 7003;
 
+    warn "Connecting to $self->{hostspec}\n" if DEBUGGING;
+
     socket my $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
     IO::Handle::blocking($sock, 0);
     setsockopt($sock, IPPROTO_TCP, TCP_NODELAY, pack("l", 1)) or die;
@@ -105,6 +107,7 @@ sub event_write {
     if ($self->{state} == S_CONNECTING) {
         $self->{state} = S_READY;
         $self->watch_read(1);
+        warn "$self->{hostspec} connected and ready.\n" if DEBUGGING;
         $_->() foreach @{$self->{on_ready}};
         $self->{on_ready} = [];
     }
@@ -117,6 +120,7 @@ sub event_read {
 
     my $input = $self->read( 128 * 1024 );
     unless (defined $input) {
+        $self->mark_dead if $self->stuff_outstanding;
         $self->close( "EOF" );
         return;
     }
@@ -164,6 +168,7 @@ sub close {
 sub mark_dead {
     my Gearman::Client::Async::Connection $self = shift;
     $self->{deadtime} = time + 10;
+    warn "$self->{hostspec} marked dead for a bit." if DEBUGGING;
 }
 
 sub alive {
@@ -178,15 +183,24 @@ sub add_task {
     Carp::confess("add_task called when in wrong state")
         unless $self->{state} == S_READY;
 
+    warn "writing task $task to $self->{hostspec}\n" if DEBUGGING;
+
     $self->write( $task->pack_submit_packet );
     push @{$self->{need_handle}}, $task;
+}
+
+sub stuff_outstanding {
+    my Gearman::Client::Async::Connection $self = shift;
+    return
+        @{$self->{need_handle}} ||
+        %{$self->{waiting}};
 }
 
 sub _requeue_all {
     my Gearman::Client::Async::Connection $self = shift;
 
     my $need_handle = $self->{need_handle};
-    my $waiting = $self->{waiting};
+    my $waiting     = $self->{waiting};
 
     $self->{need_handle} = [];
     $self->{waiting}     = {};
@@ -197,15 +211,19 @@ sub _requeue_all {
         $task->fail;
     }
 
-    while (my ($shandle, $task) = each( %$waiting )) {
-        warn "Task $task ($shandle) in waiting queue during socket error, queueing for redispatch\n" if DEBUGGING;
-        $task->fail;
+    while (my ($shandle, $tasklist) = each( %$waiting )) {
+        foreach my $task (@$tasklist) {
+            warn "Task $task ($shandle) in waiting queue during socket error, queueing for redispatch\n" if DEBUGGING;
+            $task->fail;
+        }
     }
 }
 
 sub process_packet {
     my Gearman::Client::Async::Connection $self = shift;
     my $res = shift;
+
+    warn "Got packet '$res->{type}' from $self->{hostspec}\n" if DEBUGGING;
 
     if ($res->{type} eq "job_created") {
         my Gearman::Task $task = shift @{ $self->{need_handle} } or

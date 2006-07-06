@@ -5,6 +5,7 @@ use warnings;
 our $Bin;
 use FindBin qw( $Bin );
 
+# for working out of svn:
 use lib "$Bin/../../Gearman/lib";
 $ENV{PERL5LIB} .= ":$Bin/../../Gearman/lib";
 
@@ -31,7 +32,7 @@ sub start_server {
     my $pid = start_child([ $server, '-p', $port ]);
     $Children{$pid} = 'S';
     wait_for_port($port);
-    return 1;
+    return $pid;
 }
 
 sub start_worker {
@@ -42,6 +43,7 @@ sub start_worker {
                   0..$num-1;
     my $pid = start_child([ $worker, '-s', $servers ]);
     $Children{$pid} = 'W';
+    return $pid;
 }
 
 sub start_child {
