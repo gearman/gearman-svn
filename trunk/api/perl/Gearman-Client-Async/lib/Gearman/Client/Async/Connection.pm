@@ -14,7 +14,10 @@ use fields (
             'deadtime',    # unixtime we're marked dead until.
             'on_ready',    # arrayref of on_ready callbacks to run on connect success
             'on_error',    # arrayref of on_error callbacks to run on connect failure
+            't_offline',   # bool: fake being off the net for purposes of connecting, to force timeout
             );
+
+our $T_ON_TIMEOUT;
 
 use constant S_DISCONNECTED => \ "disconnected";
 use constant S_CONNECTING   => \ "connecting";
@@ -79,17 +82,21 @@ sub connect {
     }
 
     $self->SUPER::new( $sock );
+    $self->{parser} = Gearman::ResponseParser::Async->new( $self );
 
-    connect $sock, Socket::sockaddr_in( $port, Socket::inet_aton( $host ) );
+    connect $sock, Socket::sockaddr_in($port, Socket::inet_aton($host));
 
     Danga::Socket->AddTimer(0.25, sub {
         return unless $self->{state} == S_CONNECTING;
-        $self->event_err;  # fake a connection error. took too long, people are waiting.
+        $T_ON_TIMEOUT->() if $T_ON_TIMEOUT->();
+        $self->on_connect_error;
     });
 
-    $self->{parser} = Gearman::ResponseParser::Async->new( $self );
-
-    $self->watch_write(1);
+    # unless we're faking being offline for the test suite, connect and watch
+    # for writabilty so we know the connect worked...
+    unless ($self->{t_offline}) {
+        $self->watch_write(1);
+    }
 }
 
 sub event_write {
@@ -122,16 +129,24 @@ sub event_err {
 
     my $was_connecting = ($self->{state} == S_CONNECTING);
 
+    if ($was_connecting && $self->{t_offline}) {
+        $self->SUPER::close( "error" );
+        return;
+    }
+
     $self->mark_dead;
     $self->close( "error" );
+    $self->on_connect_error if $was_connecting;
+}
 
-    if ($was_connecting) {
-        warn "Jobserver, $self->{hostspec} ($self) has failed to connect properly\n" if DEBUGGING;
-        $_->() foreach @{$self->{on_error}};
-        $self->{on_error} = [];
-        return;
-        # TODOTEST: add test
-    }
+sub on_connect_error {
+    my Gearman::Client::Async::Connection $self = shift;
+    warn "Jobserver, $self->{hostspec} ($self) has failed to connect properly\n" if DEBUGGING;
+
+    $self->mark_dead;
+    $self->close( "error" );
+    $_->() foreach @{$self->{on_error}};
+    $self->{on_error} = [];
 }
 
 sub close {
@@ -282,6 +297,12 @@ sub get_in_ready_state {
     push @{$self->{on_error}}, $on_error if $on_error;
 
     $self->connect if $self->{state} == S_DISCONNECTED;
+}
+
+sub t_set_offline {
+    my ($self, $val) = @_;
+    $val = 1 unless defined $val;
+    $self->{t_offline} = $val;
 }
 
 package Gearman::ResponseParser::Async;

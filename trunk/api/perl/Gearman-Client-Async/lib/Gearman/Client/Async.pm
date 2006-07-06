@@ -32,16 +32,18 @@ use Carp qw(croak);
 
 use fields (
             'job_servers',   # arrayref of Gearman::Client::Async::Connection objects
+            't_no_random',   # don't randomize job server to use:  use first alive one.
+            't_offline_host', # hashref: hostname -> $bool, if host should act as offline, for testing
             );
 
 use Gearman::Objects;
 use Gearman::Task;
 use Gearman::JobStatus;
 use Gearman::Client::Async::Connection;
-
+use List::Util qw(first);
 use vars qw($VERSION);
 
-$VERSION = "0.00_01";
+$VERSION = "0.10";
 
 sub DEBUGGING () { 0 }
 
@@ -50,13 +52,31 @@ sub new {
     my $self = $class;
     $self = fields::new($class) unless ref $self;
 
-    $self->{job_servers} = [];
+    $self->{job_servers}    = [];
+    $self->{t_offline_host} = {};
 
     my $js = delete $opts{job_servers};
     $self->set_job_servers(@$js) if $js;
 
     croak "Unknown parameters: " . join(", ", keys %opts) if %opts;
     return $self;
+}
+
+# for testing.
+sub t_set_disable_random {
+    my $self = shift;
+    $self->{t_no_random} = shift;
+}
+
+sub t_set_offline_host {
+    my ($self, $host, $val) = @_;
+    $val = 1 unless defined $val;
+    $self->{t_offline_host}{$host} = $val;
+
+    my $conn = first { $_->hostspec eq $host } @{ $self->{job_servers} }
+        or die "No host found with that spec to mark offline";
+
+    $conn->t_set_offline($val);
 }
 
 # set job servers, without shutting down dups, and shutting down old ones gracefully
@@ -113,7 +133,8 @@ sub add_task {
         }
         else {
             # Task is not hashed, random job server
-            $js = @job_servers[int( rand( @job_servers ))];
+            $js = @job_servers[$self->{t_no_random} ? 0 :
+                               int( rand( @job_servers ))];
         }
 
         # TODO Fix this violation of object privacy.
@@ -139,4 +160,3 @@ sub add_task {
 }
 
 1;
-__END__
