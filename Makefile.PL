@@ -11,7 +11,7 @@ WriteMakefile(
                     },
     ( $] >= 5.005 ?
       (
-        AUTHOR       => 'Jonathan Steinert (hachi@cpan.org)',
+        AUTHOR       => 'Brad Fitzpatrick (brad@danga.org), Jonathan Steinert (hachi@cpan.org)',
         ABSTRACT_FROM => 'lib/Gearman/Client/Async.pm',
       ) : ()),
     dist => {

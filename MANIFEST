@@ -1,6 +1,7 @@
 lib/Gearman/Client/Async.pm
 lib/Gearman/Client/Async/Connection.pm
 Makefile.PL
+CHANGES
 MANIFEST			This list of files
 META.yml			Module meta-data (added by MakeMaker)
 README.txt
