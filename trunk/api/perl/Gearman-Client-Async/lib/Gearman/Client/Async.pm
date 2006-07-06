@@ -40,6 +40,7 @@ use Gearman::Objects;
 use Gearman::Task;
 use Gearman::JobStatus;
 use Gearman::Client::Async::Connection;
+
 use List::Util qw(first);
 use vars qw($VERSION);
 

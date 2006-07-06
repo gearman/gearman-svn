@@ -7,7 +7,7 @@ WriteMakefile(
     PREREQ_PM    => {
                      'Test::Simple' => 0.44,
                      Danga::Socket  => 1.51,
-                     Gearman::Util => 0,
+                     Gearman::Client => 1.01,
                     },
     ( $] >= 5.005 ?
       (
