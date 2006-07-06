@@ -2,7 +2,7 @@ package Gearman::Client::Async;
 
 =head1 NAME
 
-Gearman::Client::Async - Asynchronous client module for Gearman for Danga::Socket servers
+Gearman::Client::Async - Asynchronous client module for Gearman for Danga::Socket applications
 
 =head1 SYNOPSIS
 
@@ -23,6 +23,21 @@ Gearman::Client::Async - Asynchronous client module for Gearman for Danga::Socke
     # Start a task
     $task = Gearman::Task->new(...); # with callbacks, etc
     $client->add_task( $task );
+
+=head1 COPYRIGHT
+
+Copyright 2006 Six Apart, Ltd.
+
+License granted to use/distribute under the same terms as Perl itself.
+
+=head1 WARRANTY
+
+This is free software.  This comes with no warranty whatsoever.
+
+=head1 AUTHORS
+
+ Brad Fitzpatrick (brad@danga.com)
+ Jonathan Steinert (hachi@cpan.org)
 
 =cut
 
