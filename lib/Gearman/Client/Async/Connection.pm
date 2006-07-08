@@ -86,7 +86,13 @@ sub connect {
     $self->SUPER::new( $sock );
     $self->{parser} = Gearman::ResponseParser::Async->new( $self );
 
-    connect $sock, Socket::sockaddr_in($port, Socket::inet_aton($host));
+    eval {
+        connect $sock, Socket::sockaddr_in($port, Socket::inet_aton($host));
+    };
+    if ($@) {
+        $self->on_connect_error;
+        return;
+    }
 
     Danga::Socket->AddTimer(0.25, sub {
         return unless $self->{state} == S_CONNECTING;
