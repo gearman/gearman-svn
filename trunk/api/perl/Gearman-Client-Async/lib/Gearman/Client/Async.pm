@@ -51,6 +51,7 @@ use fields (
             't_offline_host', # hashref: hostname -> $bool, if host should act as offline, for testing
             );
 
+use Danga::Socket 1.52;
 use Gearman::Objects;
 use Gearman::Task;
 use Gearman::JobStatus;
@@ -59,7 +60,7 @@ use Gearman::Client::Async::Connection;
 use List::Util qw(first);
 use vars qw($VERSION);
 
-$VERSION = "0.90";
+$VERSION = "0.91";
 
 sub DEBUGGING () { 0 }
 
@@ -160,9 +161,11 @@ sub add_task {
                                 # on_ready:
                                 sub {
                                     if (my $timeout = $task->{timeout}) {
-                                        Danga::Socket->AddTimer($timeout, sub {
-                                            return if $task->is_finished;
-                                            $task->final_fail;
+                                        my $timer = Danga::Socket->AddTimer($timeout, sub {
+                                            $task->final_fail('timeout');
+                                        });
+                                        $task->set_on_post_hooks(sub {
+                                            $timer->cancel;
                                         });
                                     }
                                     $js->add_task( $task );
