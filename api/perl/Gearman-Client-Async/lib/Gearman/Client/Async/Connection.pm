@@ -115,10 +115,16 @@ sub event_write {
         $self->watch_read(1);
         warn "$self->{hostspec} connected and ready.\n" if DEBUGGING;
         $_->() foreach @{$self->{on_ready}};
-        $self->{on_ready} = [];
+        $self->destroy_callbacks;
     }
 
     $self->watch_write(0) if $self->write(undef);
+}
+
+sub destroy_callbacks {
+    my Gearman::Client::Async::Connection $self = shift;
+    $self->{on_ready} = [];
+    $self->{on_error} = [];
 }
 
 sub event_read {
@@ -156,7 +162,7 @@ sub on_connect_error {
     $self->mark_dead;
     $self->close( "error" );
     $_->() foreach @{$self->{on_error}};
-    $self->{on_error} = [];
+    $self->destroy_callbacks;
 }
 
 sub close {
@@ -321,6 +327,7 @@ package Gearman::ResponseParser::Async;
 
 use strict;
 use warnings;
+use Scalar::Util qw(weaken);
 
 use Gearman::ResponseParser;
 use base 'Gearman::ResponseParser';
@@ -331,6 +338,7 @@ sub new {
     my $self = $class->SUPER::new;
 
     $self->{_conn} = shift;
+    weaken($self->{_conn});
 
     return $self;
 }
@@ -339,12 +347,14 @@ sub on_packet {
     my $self = shift;
     my $packet = shift;
 
+    return unless $self->{_conn};
     $self->{_conn}->process_packet( $packet );
 }
 
 sub on_error {
     my $self = shift;
 
+    return unless $self->{_conn};
     $self->{_conn}->mark_unsafe;
     $self->{_conn}->close;
 }
