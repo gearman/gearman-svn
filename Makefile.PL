@@ -6,7 +6,7 @@ WriteMakefile(
     VERSION_FROM => 'lib/Gearman/Client/Async.pm', # finds $VERSION
     PREREQ_PM    => {
                      'Test::Simple' => 0.44,
-                     Danga::Socket  => 1.51,
+                     Danga::Socket  => 1.52,
                      Gearman::Client => 1.01,
                     },
     ( $] >= 5.005 ?
