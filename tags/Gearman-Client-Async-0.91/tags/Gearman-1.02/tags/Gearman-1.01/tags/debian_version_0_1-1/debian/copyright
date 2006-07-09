@@ -1,0 +1,24 @@
+This package was debianized by Pavel Skaldin <pskaldin@sixapart.com> on
+Mon, 13 Mar 2006 15:05:17 -0800.
+
+Upstream Authors:
+	Brad Fitzpatrick <brad@danga.com>
+	Brad Whitaker <whitaker@danga.com>
+
+Copyright:
+
+    Copyright 2006, Six Apart Ltd. All rights reserved.
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of either:
+
+    a) the GNU General Public License as published by the Free Software
+       Foundation; either version 1, or (at your option) any later
+       version, or
+
+    b) the "Artistic License" which comes with Perl.
+
+    On Debian GNU/Linux systems, the complete text of the GNU General
+    Public License can be found in `/usr/share/common-licenses/GPL' and
+    the Artistic Licence in `/usr/share/common-licenses/Artistic'.
+

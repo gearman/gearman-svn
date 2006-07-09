@@ -1,0 +1,10 @@
+0.91
+    -- use Danga::Socket's cancellable timers to kill the timeout
+       timers as soon as possible on success or fail.
+
+0.90
+    -- fix memory leaks
+
+0.80
+    -- initial release, now that it has a nice big passing test suite,
+       does timeouts, and actually handles error conditions.  :)

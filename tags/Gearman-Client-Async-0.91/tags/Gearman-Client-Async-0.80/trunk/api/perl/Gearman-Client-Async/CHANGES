@@ -1,0 +1,3 @@
+0.80
+    -- initial release, now that it has a nice big passing test suite,
+       does timeouts, and actually handles error conditions.  :)
