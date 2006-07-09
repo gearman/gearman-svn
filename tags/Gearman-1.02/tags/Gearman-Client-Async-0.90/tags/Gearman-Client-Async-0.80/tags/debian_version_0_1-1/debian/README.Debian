@@ -1,8 +1,0 @@
-gearman for Debian
-------------------
-
-Gearman is still in heavy development and lacks some of the client and worker
-functionality. However, read /usr/share/doc/gearmand/overview.txt for all the
-information.
-
- -- Pavel Skaldin <pskaldin@sixapart.com>, Mon, 13 Mar 2006 15:05:17 -0800
