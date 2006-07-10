@@ -96,7 +96,7 @@ sub connect {
 
     Danga::Socket->AddTimer(0.25, sub {
         return unless $self->{state} == S_CONNECTING;
-        $T_ON_TIMEOUT->() if $T_ON_TIMEOUT->();
+        $T_ON_TIMEOUT->() if $T_ON_TIMEOUT;
         $self->on_connect_error;
     });
 
