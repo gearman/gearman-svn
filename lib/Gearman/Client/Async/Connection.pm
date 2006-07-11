@@ -303,8 +303,8 @@ sub give_up_on {
     my Gearman::Client::Async::Connection $self = shift;
     my $task = shift;
 
-    my $shandle = $self->{task2handle}{"$task"} or die "bad internal state1";
-    my $task_list = $self->{waiting}{$shandle} or die "bad internal state2";
+    my $shandle = $self->{task2handle}{"$task"} or return;
+    my $task_list = $self->{waiting}{$shandle} or return;
     @$task_list = grep { $_ != $task } @$task_list;
     unless (@$task_list) {
         delete $self->{waiting}{$shandle};
