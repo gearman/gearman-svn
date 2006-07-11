@@ -1,5 +1,8 @@
     -- fix a memory leak on timeouts.  adds a new test for it too.
 
+    -- fix a bogus calling instead of checking of a test variable on
+       connection timeout
+
 0.91
     -- use Danga::Socket's cancellable timers to kill the timeout
        timers as soon as possible on success or fail.
