@@ -12,6 +12,7 @@ use fields (
             'parser',      # parser object
             'hostspec',    # scalar: "host:ip"
             'deadtime',    # unixtime we're marked dead until.
+            'task2handle', # hashref of stringified Task -> scalar handle
             'on_ready',    # arrayref of on_ready callbacks to run on connect success
             'on_error',    # arrayref of on_error callbacks to run on connect failure
             't_offline',   # bool: fake being off the net for purposes of connecting, to force timeout
@@ -26,6 +27,7 @@ use constant S_READY        => \ "ready";
 use Carp qw(croak);
 use Gearman::Task;
 use Gearman::Util;
+use Scalar::Util qw(weaken);
 
 use IO::Handle;
 use Socket qw(PF_INET IPPROTO_TCP TCP_NODELAY SOL_SOCKET SOCK_STREAM);
@@ -48,6 +50,7 @@ sub new {
     $self->{deadtime}    = 0;
     $self->{on_ready}    = [];
     $self->{on_error}    = [];
+    $self->{task2handle} = {};
 
     croak "Unknown parameters: " . join(", ", keys %opts) if %opts;
     return $self;
@@ -199,6 +202,7 @@ sub add_task {
 
     $self->write( $task->pack_submit_packet );
     push @{$self->{need_handle}}, $task;
+    Scalar::Util::weaken($self->{need_handle}->[-1]);
 }
 
 sub stuff_outstanding {
@@ -220,7 +224,7 @@ sub _requeue_all {
     while (@$need_handle) {
         my $task = shift @$need_handle;
         warn "Task $task in need_handle queue during socket error, queueing for redispatch\n" if DEBUGGING;
-        $task->fail;
+        $task->fail if $task;
     }
 
     while (my ($shandle, $tasklist) = each( %$waiting )) {
@@ -242,7 +246,10 @@ sub process_packet {
             die "Um, got an unexpected job_created notification";
 
         my $shandle = ${ $res->{'blobref'} };
-        push @{ $self->{waiting}->{$shandle} ||= [] }, $task;
+        if ($task) {
+            $self->{task2handle}{"$task"} = $shandle;
+            push @{ $self->{waiting}->{$shandle} ||= [] }, $task;
+        }
         return 1;
     }
 
@@ -258,13 +265,17 @@ sub process_packet {
         my $shandle = $1;
 
         my $task_list = $self->{waiting}{$shandle} or
-            die "Uhhhh:  got work_complete for unknown handle: $shandle\n";
+            return;
 
         my Gearman::Task $task = shift @$task_list or
-            die "Uhhhh:  task_list is empty on work_complete for handle $shandle\n";
+            return;
 
         $task->complete($res->{'blobref'});
-        delete $self->{waiting}{$shandle} unless @$task_list;
+
+        unless (@$task_list) {
+            delete $self->{waiting}{$shandle};
+            delete $self->{task2handle}{"$task"};
+        }
 
         warn "Jobs: " . scalar( keys( %{$self->{waiting}} ) ) . "\n" if DEBUGGING;
 
@@ -275,7 +286,7 @@ sub process_packet {
         my ($shandle, $nu, $de) = split(/\0/, ${ $res->{'blobref'} });
 
         my $task_list = $self->{waiting}{$shandle} or
-            die "Uhhhh:  got work_status for unknown handle: $shandle\n";
+            return;
 
         foreach my Gearman::Task $task (@$task_list) {
             $task->status($nu, $de);
@@ -288,18 +299,36 @@ sub process_packet {
 
 }
 
+sub give_up_on {
+    my Gearman::Client::Async::Connection $self = shift;
+    my $task = shift;
+
+    my $shandle = $self->{task2handle}{"$task"} or die "bad internal state1";
+    my $task_list = $self->{waiting}{$shandle} or die "bad internal state2";
+    @$task_list = grep { $_ != $task } @$task_list;
+    unless (@$task_list) {
+        delete $self->{waiting}{$shandle};
+    }
+
+}
+
 # note the failure of a task given by its jobserver-specific handle
 sub _fail_jshandle {
     my Gearman::Client::Async::Connection $self = shift;
     my $shandle = shift;
 
     my $task_list = $self->{waiting}->{$shandle} or
-        die "Uhhhh:  got work_fail for unknown handle: $shandle\n";
+        return;
 
     my Gearman::Task $task = shift @$task_list or
-        die "Uhhhh:  task_list is empty on work_fail for handle $shandle\n";
+        return;
 
-    delete $self->{waiting}{$shandle} unless @$task_list;
+    # cleanup
+    unless (@$task_list) {
+        delete $self->{task2handle}{"$task"};
+        delete $self->{waiting}{$shandle};
+    }
+
     $task->fail;
 }
 
