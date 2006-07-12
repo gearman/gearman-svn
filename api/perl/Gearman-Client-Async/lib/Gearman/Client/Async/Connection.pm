@@ -223,6 +223,9 @@ sub _requeue_all {
 
     while (@$need_handle) {
         my $task = shift @$need_handle;
+	
+        next unless defined $task; # Could have been weak
+	
         warn "Task $task in need_handle queue during socket error, queueing for redispatch\n" if DEBUGGING;
         $task->fail if $task;
     }
@@ -242,8 +245,11 @@ sub process_packet {
     warn "Got packet '$res->{type}' from $self->{hostspec}\n" if DEBUGGING;
 
     if ($res->{type} eq "job_created") {
-        my Gearman::Task $task = shift @{ $self->{need_handle} } or
-            die "Um, got an unexpected job_created notification";
+        my $need_handle = $self->{need_handle};
+        die "List of tasks pending handle unexpectedly empty" unless @$need_handle;
+        my Gearman::Task $task = shift @$need_handle;
+
+        return unless defined $task; # Could have been weak
 
         my $shandle = ${ $res->{'blobref'} };
         if ($task) {
@@ -289,6 +295,7 @@ sub process_packet {
             return;
 
         foreach my Gearman::Task $task (@$task_list) {
+            next unless $task; # Could have been weak
             $task->status($nu, $de);
         }
 
