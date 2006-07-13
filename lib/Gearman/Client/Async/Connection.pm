@@ -242,8 +242,11 @@ sub process_packet {
     warn "Got packet '$res->{type}' from $self->{hostspec}\n" if DEBUGGING;
 
     if ($res->{type} eq "job_created") {
+
+        die "Um, got an unexpected job_created notification" unless @{ $self->{need_handle} };
         my Gearman::Task $task = shift @{ $self->{need_handle} } or
-            die "Um, got an unexpected job_created notification";
+            return 1;
+
 
         my $shandle = ${ $res->{'blobref'} };
         if ($task) {
