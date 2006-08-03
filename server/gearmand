@@ -39,6 +39,7 @@ Brad Whitaker <whitaker@danga.com>
 =cut
 
 use strict;
+use warnings;
 use Getopt::Long;
 use Carp;
 use Danga::Socket;
