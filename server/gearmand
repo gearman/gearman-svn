@@ -420,7 +420,7 @@ sub process_line {
         if ($cmd_handler) {
             my $args = decode_url_args(\$args);
             $cmd_handler->($self, $args);
-            next;
+            return;
         }
     }
 
