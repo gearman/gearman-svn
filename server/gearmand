@@ -616,7 +616,22 @@ sub CMD_can_do {
     my Gearman::Server::Client $self = shift;
     my $ar = shift;
 
-    $self->{can_do}->{$$ar} = 1;
+    $self->{can_do}->{$$ar} = undef;
+    $self->_setup_can_do_list;
+}
+
+sub CMD_can_do_timeout {
+    my Gearman::Server::Client $self = shift;
+    my $ar = shift;
+
+    my ($task, $timeout) = $$ar =~ m/([^\0]+)(?:\0(.+))?/;
+
+    if (defined $timeout) {
+        $self->{can_do}->{$task} = $timeout;
+    } else {
+        $self->{can_do}->{$task} = undef;
+    }
+
     $self->_setup_can_do_list;
 }
 

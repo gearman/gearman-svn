@@ -258,6 +258,26 @@ sub register_function {
 
     my $req = Gearman::Util::pack_req_command("can_do", $func);
 
+    $self->_register_all($req);
+    $self->{can}{$func} = $subref;
+}
+
+sub register_function_timeout {
+    my Gearman::Worker $self = shift;
+    my $func = shift;
+    my $timeout = shift;
+    my $subref = shift;
+
+    my $req = Gearman::Util::pack_req_command("can_do_timeout", "$func\0$timeout");
+
+    $self->_register_all($req);
+    $self->{can}{$func} = $subref;
+}
+
+sub _register_all {
+    my Gearman::Worker $self = shift;
+    my $req = shift;
+
     foreach my $js (@{ $self->{job_servers} }) {
         my $jss = $self->_get_js_sock($js)
             or next;
@@ -266,8 +286,6 @@ sub register_function {
             delete $self->{sock_cache}{$js};
         }
     }
-
-    $self->{can}{$func} = $subref;
 }
 
 # getter/setter
