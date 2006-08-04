@@ -64,6 +64,7 @@ use fields (
             'down_since',        # host:port -> unixtime
             'connecting',        # host:port -> unixtime connect started at
             'can',               # func -> subref
+	    'timeouts',          # func -> timeouts
             'client_id',         # random identifer string, no whitespace
             );
 
@@ -78,6 +79,7 @@ sub new {
     $self->{last_connect_fail} = {};
     $self->{down_since} = {};
     $self->{can} = {};
+    $self->{timeouts} = {};
     $self->{client_id} = join("", map { chr(int(rand(26)) + 97) } (1..30));
 
     $self->job_servers(@{ $opts{job_servers} })
@@ -127,7 +129,8 @@ sub _get_js_sock {
 
     # get this socket's state caught-up
     foreach my $func (keys %{$self->{can}}) {
-        unless (_set_capability($sock, $func, 1)) {
+	my $timeout = $self->{timeouts}->{$func};
+        unless (_set_ability($sock, $func, $timeout)) {
             delete $self->{sock_cache}{$ipport};
             return undef;
         }
@@ -136,11 +139,15 @@ sub _get_js_sock {
     return $sock;
 }
 
-sub _set_capability {
-    my ($sock, $func, $can) = @_;
+sub _set_ability {
+    my ($sock, $func, $timeout) = @_;
 
-    my $req = Gearman::Util::pack_req_command($can ? "can_do" : "cant_do",
-                                              $func);
+    my $req;
+    if (defined $timeout) {
+	$req = Gearman::Util::pack_req_command("can_do_timeout", "$func\0$timeout");
+    } else {
+	$req = Gearman::Util::pack_req_command("can_do", $func);
+    }
     return Gearman::Util::send_req($sock, \$req);
 }
 
@@ -158,6 +165,7 @@ sub reset_abilities {
     }
 
     $self->{can} = {};
+    $self->{timeouts} = {};
 }
 
 # does one job and returns.  no return value.
@@ -272,6 +280,7 @@ sub register_function_timeout {
 
     $self->_register_all($req);
     $self->{can}{$func} = $subref;
+    $self->{timeouts}{$func} = $timeout;
 }
 
 sub _register_all {
