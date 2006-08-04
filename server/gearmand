@@ -619,7 +619,6 @@ sub CMD_grab_job {
             my $timeout = $self->{can_do}->{$job_to_grab};
             if (defined $timeout) {
                 my $timer = Danga::Socket->AddTimer($timeout, sub {
-                    delete $self->{doing}{$job->handle};
                     return $self->error_packet("not_worker") unless $job->worker == $self;
 
                     my $msg = Gearman::Util::pack_res_command("work_fail", $job->handle);
