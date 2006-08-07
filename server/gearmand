@@ -548,7 +548,7 @@ sub CMD_work_complete {
     $job->note_finished(1);
     if (my $timer = $self->{timer}) {
         $timer->cancel;
-        $timer = undef;
+        $self->{timer} = undef;
     }
 
     return 1;
@@ -566,7 +566,7 @@ sub CMD_work_fail {
     $job->note_finished(1);
     if (my $timer = $self->{timer}) {
         $timer->cancel;
-        $timer = undef;
+        $self->{timer} = undef;
     }
 
     return 1;
