@@ -42,13 +42,13 @@ use strict;
 use warnings;
 use Getopt::Long;
 use Carp;
-use Danga::Socket;
+use Danga::Socket 1.52;
 use IO::Socket::INET;
 use POSIX ();
 use Gearman::Util;
 use vars qw($DEBUG $VERSION);
 $DEBUG = 0;
-$VERSION = "1.01";
+$VERSION = "1.02";
 
 my (
     $daemonize,
