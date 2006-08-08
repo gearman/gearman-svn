@@ -64,7 +64,7 @@ use fields (
             'down_since',        # host:port -> unixtime
             'connecting',        # host:port -> unixtime connect started at
             'can',               # func -> subref
-	    'timeouts',          # func -> timeouts
+            'timeouts',          # func -> timeouts
             'client_id',         # random identifer string, no whitespace
             );
 
@@ -129,7 +129,7 @@ sub _get_js_sock {
 
     # get this socket's state caught-up
     foreach my $func (keys %{$self->{can}}) {
-	my $timeout = $self->{timeouts}->{$func};
+        my $timeout = $self->{timeouts}->{$func};
         unless (_set_ability($sock, $func, $timeout)) {
             delete $self->{sock_cache}{$ipport};
             return undef;
@@ -144,9 +144,9 @@ sub _set_ability {
 
     my $req;
     if (defined $timeout) {
-	$req = Gearman::Util::pack_req_command("can_do_timeout", "$func\0$timeout");
+        $req = Gearman::Util::pack_req_command("can_do_timeout", "$func\0$timeout");
     } else {
-	$req = Gearman::Util::pack_req_command("can_do", $func);
+        $req = Gearman::Util::pack_req_command("can_do", $func);
     }
     return Gearman::Util::send_req($sock, \$req);
 }
