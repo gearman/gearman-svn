@@ -700,6 +700,9 @@ sub CMD_get_status {
         }
     }
 
+    $num = '' unless defined $num;
+    $den = '' unless defined $den;
+    
     $self->res_packet("status_res", join("\0",
                                          $$ar,
                                          $known,
