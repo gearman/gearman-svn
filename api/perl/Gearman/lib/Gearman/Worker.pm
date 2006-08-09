@@ -225,6 +225,8 @@ sub work {
             my $handler = $self->{can}{$func};
             my $ret = eval { $handler->($job); };
 
+            warn "Job '$func' died: $@" if $@;
+
             my $work_req;
             if (defined $ret) {
                 $work_req = Gearman::Util::pack_req_command("work_complete", "$handle\0" . (ref $ret ? $$ret : $ret));
