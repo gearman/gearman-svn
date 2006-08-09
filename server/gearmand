@@ -159,7 +159,7 @@ package Gearman::Server::Client;
 use Danga::Socket;
 use base 'Danga::Socket';
 use fields (
-            'can_do',  # { $job_name => 1 }
+            'can_do',  # { $job_name => $timeout } $timeout can be undef indicating no timeout
             'can_do_list',
             'can_do_iter',
             'read_buf',
