@@ -1,7 +1,7 @@
 Source: gearman
 Section: perl
 Priority: optional
-Maintainer: Pavel Skaldin <pskaldin@sixapart.com>
+Maintainer: Brad Fitzpatrick <brad@danga.com>
 Build-Depends: debhelper (>= 4.0.0)
 Standards-Version: 3.6.2
 

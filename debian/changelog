@@ -1,3 +1,10 @@
+gearman (1.02-1) unstable; urgency=low
+
+  * Devel::Gladiator support
+  * shutdown graceful support
+
+ -- Brad Fitzpatrick <brad@danga.com>  Wed, 20 Sep 2006 07:32:18 +0000
+
 gearman (1.00-1) unstable; urgency=low
 
   * rearranging for CPAN upload
