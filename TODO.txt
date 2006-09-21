@@ -1,0 +1,3 @@
+* todo: gearman client timeouts in taskset ->wait
+  http://rt.livejournal.org/Ticket/Display.html?id=1694
+
