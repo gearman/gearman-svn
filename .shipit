@@ -1,0 +1,5 @@
+steps = FindVersion, ChangeVersion, CheckChangeLog, DistTest, Commit, Tag, MakeDist, UploadCPAN
+
+svn.tagpattern = Gearman-Client-Async-%v
+
+# CheckChangeLog.files = ChangeLog, MyProj.CHANGES
