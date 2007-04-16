@@ -1,3 +1,5 @@
+0.92 (2007-04-16)
+
     -- fix for when a client task timeouts before the server gets a handle back to the client
 
     -- fix a memory leak on timeouts.  adds a new test for it too.
