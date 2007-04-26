@@ -60,7 +60,7 @@ use Gearman::Client::Async::Connection;
 use List::Util qw(first);
 use vars qw($VERSION);
 
-$VERSION = "0.92";
+$VERSION = "0.93";
 
 sub DEBUGGING () { 0 }
 
@@ -181,5 +181,18 @@ sub add_task {
     };
     $try_again->();
 }
+
+# Gearman::Client::Async sometimes fakes itself duck-typing style as a
+# Gearman::Taskset, since a task"set" makes no sense in an async
+# world, where there's no need to wait on a set of things... since
+# everything happens at its own pace.  so for duck-typing reasons (or,
+# er, "implementing an interface", say), we need to implement a the
+# "taskset client method" but in our case, that's just us.
+sub client { $_[0] }
+
+# as a Gearman::Client-like thing, we'll be asked for our prefix, which this module
+# currently doesn't support, but the base Gearman libraries expect.
+sub prefix { "" }
+
 
 1;

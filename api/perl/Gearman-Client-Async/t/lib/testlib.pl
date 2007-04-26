@@ -9,6 +9,10 @@ use FindBin qw( $Bin );
 use lib "$Bin/../../Gearman/lib";
 $ENV{PERL5LIB} .= ":$Bin/../../Gearman/lib";
 
+# for disttest, which is another layer down.  :(
+use lib "$Bin/../../../Gearman/lib";
+$ENV{PERL5LIB} .= ":$Bin/../../../Gearman/lib";
+
 use Gearman::Client::Async;
 use POSIX qw( :sys_wait_h );
 use List::Util qw(first);;
@@ -22,7 +26,8 @@ END { kill_children() }
 
 sub start_server {
     my($port) = @_;
-    my @loc = ("$Bin/../../../../server/gearmand",  # using svn
+    my @loc = ("$Bin/../../../../server/gearmand",    # using svn
+               "$Bin/../../../../../server/gearmand", # using svn, with disttest
                '/usr/bin/gearmand',            # where some distros might put it
                '/usr/sbin/gearmand',           # where other distros might put it
                );
