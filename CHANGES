@@ -1,3 +1,6 @@
+    -- Make the job_servers list be able to contain raw sockets, or even Gearman::Server
+       objects, so that we can run in the same thread as a Gearman::Server very easily.
+
 0.93 (2007-04-26)
 
     -- don't break with latest Gearman::Client (package 'Gearman') which added prefix

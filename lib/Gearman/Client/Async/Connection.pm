@@ -41,10 +41,30 @@ sub new {
 
     $self = fields::new( $self ) unless ref $self;
 
-    $self->{hostspec}    = delete( $opts{hostspec} ) or
+    my $hostspec         = delete( $opts{hostspec} ) or
         croak("hostspec required");
 
-    $self->{state}       = S_DISCONNECTED;
+    if (ref $hostspec eq 'GLOB') {
+        # In this case we have been passed a globref, hopefully a socket that has already
+        # been connected to the Gearman server in some way.
+        $self->SUPER::new($hostspec);
+        $self->{state}       = S_CONNECTING;
+        $self->{parser} = Gearman::ResponseParser::Async->new( $self );
+        $self->watch_write(1);
+    } elsif (ref $hostspec && $hostspec->can("to_inprocess_server")) {
+        # In this case we have been passed an object that looks like a Gearman::Server,
+        # which we can just call "to_inprocess_server" on to get a socketpair connecting
+        # to it.
+        my $sock = $hostspec->to_inprocess_server;
+        $self->SUPER::new($sock);
+        $self->{state}       = S_CONNECTING;
+        $self->{parser} = Gearman::ResponseParser::Async->new( $self );
+        $self->watch_write(1);
+    }else {
+        $self->{state}       = S_DISCONNECTED;
+    }
+
+    $self->{hostspec}    = $hostspec;
     $self->{waiting}     = {};
     $self->{need_handle} = [];
     $self->{deadtime}    = 0;
