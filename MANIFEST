@@ -20,3 +20,4 @@ t/lib/testlib.pl
 t/tests-needed.t
 t/uniq.t
 t/worker.pl
+t/allinone.t

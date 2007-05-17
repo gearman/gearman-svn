@@ -60,7 +60,7 @@ use Gearman::Client::Async::Connection;
 use List::Util qw(first);
 use vars qw($VERSION);
 
-$VERSION = "0.93";
+$VERSION = "0.94";
 
 sub DEBUGGING () { 0 }
 
