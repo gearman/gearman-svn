@@ -1,3 +1,5 @@
+0.94 (2007-05-17)
+
     -- Make the job_servers list be able to contain raw sockets, or even Gearman::Server
        objects, so that we can run in the same thread as a Gearman::Server very easily.
 
