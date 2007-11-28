@@ -15,6 +15,8 @@ use fields (
             'task2handle', # hashref of stringified Task -> scalar handle
             'on_ready',    # arrayref of on_ready callbacks to run on connect success
             'on_error',    # arrayref of on_error callbacks to run on connect failure
+            'options',     # hashref of options associated with this connection and their value
+            'requests',    # arrayref of outstanding requests to line up with results or errors
             't_offline',   # bool: fake being off the net for purposes of connecting, to force timeout
             );
 
@@ -60,7 +62,7 @@ sub new {
         $self->{state}       = S_CONNECTING;
         $self->{parser} = Gearman::ResponseParser::Async->new( $self );
         $self->watch_write(1);
-    }else {
+    } else {
         $self->{state}       = S_DISCONNECTED;
     }
 
@@ -71,6 +73,12 @@ sub new {
     $self->{on_ready}    = [];
     $self->{on_error}    = [];
     $self->{task2handle} = {};
+    $self->{options}     = {};
+    $self->{requests}    = [];
+
+    if (my $val = delete $opts{exceptions}) {
+        $self->{options}->{exceptions} = $val;
+    }
 
     croak "Unknown parameters: " . join(", ", keys %opts) if %opts;
     return $self;
@@ -139,6 +147,15 @@ sub event_write {
         warn "$self->{hostspec} connected and ready.\n" if DEBUGGING;
         $_->() foreach @{$self->{on_ready}};
         $self->destroy_callbacks;
+
+        my $options = $self->{options};
+        my $requests = $self->{requests};
+
+        foreach my $option (keys %$options) {
+            my $req = Gearman::Util::pack_req_command("option_req", $option);
+            $self->write($req);
+            push @$requests, $option;
+        }
     }
 
     $self->watch_write(0) if $self->write(undef);
@@ -278,6 +295,7 @@ sub process_packet {
 
     if ($res->{type} eq "work_fail") {
         my $shandle = ${ $res->{'blobref'} };
+        warn "Job failure: $shandle\n" if DEBUGGING;
         $self->_fail_jshandle($shandle);
         return 1;
     }
@@ -316,6 +334,44 @@ sub process_packet {
         }
 
         return 1;
+    }
+
+    if ($res->{type} eq "work_exception") {
+        ${ $res->{'blobref'} } =~ s/^(.+?)\0//
+            or die "Bogus work_complete from server";
+        my $shandle = $1;
+
+
+        my $task_list = $self->{waiting}{$shandle} or
+            return;
+
+        my Gearman::Task $task = $task_list->[0] or
+            return;
+
+        $task->exception($res->{'blobref'});
+
+        return 1;
+    }
+
+    if ($res->{type} eq "error") {
+        my $requests = $self->{requests};
+
+        if (@$requests) {
+            my $request = shift @$requests;
+            delete $self->{options}->{$request};
+            warn "Request for option '$request' failed. Removing option\n" if DEBUGGING;
+            return 1;
+        }
+    }
+
+    if ($res->{type} eq "option_res") {
+        my $requests = $self->{requests};
+
+        if (@$requests) {
+            my $request = shift @$requests;
+            warn "Request for option '$request' success.\n" if DEBUGGING;
+            return 1;
+        }
     }
 
     die "Unknown/unimplemented packet type: $res->{type}";

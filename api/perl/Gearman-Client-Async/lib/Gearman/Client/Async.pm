@@ -49,6 +49,7 @@ use fields (
             'job_servers',   # arrayref of Gearman::Client::Async::Connection objects
             't_no_random',   # don't randomize job server to use:  use first alive one.
             't_offline_host', # hashref: hostname -> $bool, if host should act as offline, for testing
+            'exceptions',    # bool indicating a request for exceptions to be passed to the client
             );
 
 use Danga::Socket 1.52;
@@ -71,6 +72,8 @@ sub new {
 
     $self->{job_servers}    = [];
     $self->{t_offline_host} = {};
+
+    $self->{exceptions} = delete $opts{exceptions};
 
     my $js = delete $opts{job_servers};
     $self->set_job_servers(@$js) if $js;
@@ -115,7 +118,7 @@ sub set_job_servers {
 
     my @newlist;
     foreach (@_) {
-        push @newlist, $exist{$_} || Gearman::Client::Async::Connection->new( hostspec => $_ );
+        push @newlist, $exist{$_} || Gearman::Client::Async::Connection->new( hostspec => $_, exceptions => $self->{exceptions} );
     }
     $self->{job_servers} = \@newlist;
 }

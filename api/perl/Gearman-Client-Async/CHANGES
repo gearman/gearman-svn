@@ -1,3 +1,5 @@
+    -- Add exceptions support to Async client
+
 0.94 (2007-05-17)
 
     -- Make the job_servers list be able to contain raw sockets, or even Gearman::Server
