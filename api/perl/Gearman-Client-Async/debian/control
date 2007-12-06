@@ -1,0 +1,12 @@
+Source: libgearman-client-async-perl
+Section: perl
+Priority: optional
+Build-Depends: debhelper (>= 4.0.2)
+Build-Depends-Indep: perl (>= 5.8.0-7)
+Maintainer: Jonathan Steinert <debian@hachi.kuiki.net>
+Standards-Version: 3.6.1
+
+Package: libgearman-client-async-perl
+Architecture: all
+Depends: ${perl:Depends}, ${misc:Depends}, libgearman-perl, libdanga-socket-perl
+Description:  Async client for gearman distributed job system

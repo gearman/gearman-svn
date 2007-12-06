@@ -1,0 +1,6 @@
+libgearman-client-async-perl (0.94-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Jonathan Steinert <debian@hachi.kuiki.net>  Tue, 20 Feb 2007 00:58:02 -0800
+
