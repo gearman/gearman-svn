@@ -133,7 +133,7 @@ sub job_servers {
 
 sub add_task {
     my Gearman::Client::Async $self = shift;
-    my Gearman::Task $task = shift;
+    my Gearman::Task $task = &_get_task_from_args;
 
     my $try_again;
     $try_again = sub {
@@ -196,6 +196,74 @@ sub client { $_[0] }
 # as a Gearman::Client-like thing, we'll be asked for our prefix, which this module
 # currently doesn't support, but the base Gearman libraries expect.
 sub prefix { "" }
+
+sub new_task_set {
+    my Gearman::Client::Async $self = shift;
+
+    return $self;
+}
+
+sub wait {
+    my Gearman::Client::Async $self = shift;
+
+    my %opts = @_;
+
+    if (my $timeout = delete $opts{timeout}) {
+
+    }
+
+    my @job_servers = @{$self->{job_servers}};
+
+    Danga::Socket->SetPostLoopCallback(sub {
+        foreach my $js (@job_servers) {
+            print "\t\t" . $js->as_string . "\n";
+            return 1 if $js->stuff_outstanding;
+        }
+        warn "All done, exiting loop\n";
+        return 0;
+    });
+
+    Danga::Socket->EventLoop;
+}
+
+sub _get_task_from_args {
+    my Gearman::Task $task;
+    if (ref $_[0]) {
+        $task = $_[0];
+        Carp::croak("Argument isn't a Gearman::Task") unless ref $_[0] eq "Gearman::Task";
+    } else {
+        my ($func, $arg_p, $opts) = @_;
+        my $argref = ref $arg_p ? $arg_p : \$arg_p;
+        Carp::croak("Function argument must be scalar or scalarref")
+            unless ref $argref eq "SCALAR";
+        $task = Gearman::Task->new($func, $argref, $opts);
+    }
+    return $task;
+
+}
+
+# given a (func, arg_p, opts?), returns either undef (on fail) or scalarref of result
+sub do_task {
+    my Gearman::Client::Async $self = shift;
+    my Gearman::Task $task = &_get_task_from_args;
+
+    my $ret = undef;
+    my $did_err = 0;
+
+    $task->{on_complete} = sub {
+        $ret = shift;
+    };
+
+    $task->{on_fail} = sub {
+        $did_err = 1;
+    };
+
+    $self->add_task($task);
+    $self->wait(timeout => $task->timeout);
+
+    return $did_err ? undef : $ret;
+
+}
 
 
 1;
