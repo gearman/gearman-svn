@@ -261,6 +261,8 @@ sub add_task {
 sub stuff_outstanding {
     my Gearman::Client::Async::Connection $self = shift;
     return
+        @{$self->{on_ready}} ||
+        @{$self->{on_error}} ||
         @{$self->{need_handle}} ||
         %{$self->{waiting}};
 }
