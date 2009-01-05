@@ -216,10 +216,8 @@ sub wait {
 
     Danga::Socket->SetPostLoopCallback(sub {
         foreach my $js (@job_servers) {
-            print "\t\t" . $js->as_string . "\n";
             return 1 if $js->stuff_outstanding;
         }
-        warn "All done, exiting loop\n";
         return 0;
     });
 
