@@ -163,14 +163,20 @@ sub add_task {
         $js->get_in_ready_state(
                                 # on_ready:
                                 sub {
-                                    my $timer;
+                                    my ($overall_timer, $try_timer);
                                     if (my $timeout = $task->{timeout}) {
-                                        $timer = Danga::Socket->AddTimer($timeout, sub {
+                                        $overall_timer = Danga::Socket->AddTimer($timeout, sub {
                                             $task->final_fail('timeout');
                                         });
                                     }
+                                    if (my $timeout = $task->{try_timeout}) {
+                                        $try_timer = Danga::Socket->AddTimer($timeout, sub {
+                                            $task->fail('timeout');
+                                        });
+                                    }
                                     $task->set_on_post_hooks(sub {
-                                        $timer->cancel if $timer;
+                                        $overall_timer->cancel if $overall_timer;
+                                        $try_timer->cancel if $try_timer;
 
                                         # ALSO clean up our $js (connection's) waiting stuff:
                                         $js->give_up_on($task);
