@@ -1,6 +1,12 @@
 #!/usr/bin/perl
 
 use strict;
+
+use FindBin qw($Bin);
+$ENV{PERL5LIB} .= ":$Bin/../../Gearman/lib";
+use lib "$Bin/../../Gearman/lib";
+use lib "$Bin/../../../../server/lib";
+
 use Gearman::Client::Async;
 use Storable qw( freeze );
 use Test::More;

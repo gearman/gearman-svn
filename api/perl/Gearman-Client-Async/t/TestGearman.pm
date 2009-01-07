@@ -49,7 +49,7 @@ sub start_worker {
         $args        = {};
     }
     $num_servers ||= $args->{num_servers} || 1;
-    my $worker = "$Bin/worker.pl";
+    my $worker = "$Bin/sync-worker.pl";
     my $servers = join ',',
                   map '127.0.0.1:' . (PORT + $_),
                   0..$num_servers-1;
