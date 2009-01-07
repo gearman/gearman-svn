@@ -14,7 +14,7 @@ use lib 't';
 use TestGearman;
 
 if (start_server(PORT)) {
-    plan tests => 28;
+    plan tests => 27;
 } else {
     plan skip_all => "Can't find server to test with";
     exit 0;
