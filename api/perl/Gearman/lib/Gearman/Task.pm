@@ -37,7 +37,7 @@ sub new {
     my $opts = shift || {};
     for my $k (qw( uniq
                    on_complete on_exception on_fail on_retry on_status
-                   retry_count timeout high_priority
+                   retry_count timeout high_priority try_timeout
                )) {
         $self->{$k} = delete $opts->{$k};
     }
