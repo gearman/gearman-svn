@@ -254,17 +254,22 @@ sub work {
 
     my $last_job_time;
 
-    while (1) {
+    my %active_js = map { $_ => 1 } @{$self->{job_servers}};;
 
-        my @jss;
+    while (1) {
         my $need_sleep = 1;
 
-        my $js_count = @{ $self->{job_servers} };
+        my @jobby_js = keys %active_js;
+
+        %active_js = ();
+
+        my $js_count = @jobby_js;
         my $js_offset = int(rand($js_count));
+        my $is_idle = 0;
 
         for (my $i = 0; $i < $js_count; $i++) {
             my $js_index = ($i + $js_offset) % $js_count;
-            my $js = $self->{job_servers}->[$js_index];
+            my $js = $jobby_js[$js_index];
             my $jss = $self->_get_js_sock($js)
                 or next;
 
@@ -302,8 +307,6 @@ sub work {
                     next;
                 }
             } while ($res->{type} eq "noop");
-
-            push @jss, [$js, $jss];
 
             if ($res->{type} eq "no_job") {
                 next;
@@ -355,10 +358,20 @@ sub work {
 
             unless (Gearman::Util::send_req($jss, \$work_req)) {
                 $self->uncache_sock($js, "write_res_error");
+                next;
             }
+
+            $active_js{$js} = 1;
         }
 
-        my $is_idle = 0;
+        my @jss;
+
+        foreach my $js (@{$self->{job_servers}}) {
+            my $jss = $self->_get_js_sock($js)
+                or next;
+            push @jss, [$js, $jss];
+        }
+
         if ($need_sleep) {
             $is_idle = 1;
             my $wake_vec = '';
@@ -373,8 +386,18 @@ sub work {
             }
 
             # chill for some arbitrary time until we're woken up again
-            my $nready = select($wake_vec, undef, undef, 60);
+            my $nready = select(my $wout = $wake_vec, undef, undef, 10);
             $is_idle = 0 if $nready;
+
+
+            unless ($is_idle) {
+                foreach my $j (@jss) {
+                    my ($js, $jss) = @$j;
+                    my $fd = $jss->fileno;
+                    $active_js{$js} = 1
+                        if vec($wout, $fd, 1);
+                }
+            }
         }
 
         return if $stop_if->($is_idle, $last_job_time);
