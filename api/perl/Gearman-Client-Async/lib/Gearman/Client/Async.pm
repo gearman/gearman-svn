@@ -24,6 +24,12 @@ Gearman::Client::Async - Asynchronous client module for Gearman for Danga::Socke
     $task = Gearman::Task->new(...); # with callbacks, etc
     $client->add_task( $task );
 
+=head1 ASYNC WORKERS
+
+This module also has support for providing workers. The interface
+is slightly different than for the standard L<Gearman::Worker>
+class due to the need to run jobs asynchronously.
+
 =head1 COPYRIGHT
 
 Copyright 2006 Six Apart, Ltd.
@@ -183,6 +189,20 @@ sub add_task {
                                 );
     };
     $try_again->();
+}
+
+sub register_function {
+    my ($self, $func_name, $code) = @_;
+
+    # Tell each of the job server connections about the function,
+    # opening a connection to each if required.
+    my @job_servers = grep { $_->alive } @{$self->{job_servers}};
+    foreach my $js (@job_servers) {
+        $js->get_in_ready_state(sub {
+            $js->register_function($func_name, $code);
+        });
+    }
+
 }
 
 # Gearman::Client::Async sometimes fakes itself duck-typing style as a
