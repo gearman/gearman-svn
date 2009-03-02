@@ -7,7 +7,7 @@ WriteMakefile(
               PREREQ_PM    => {
                   'Test::Simple' => 0.44,
                   'Danga::Socket'  => 1.52,
-                  'Gearman::Client' => 1.05,
+                  'Gearman::Client' => 1.10,
               },
               AUTHOR       => 'Brad Fitzpatrick (brad@danga.org), Jonathan Steinert (hachi@cpan.org)',
               ABSTRACT_FROM => 'lib/Gearman/Client/Async.pm',
