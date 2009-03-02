@@ -254,17 +254,20 @@ sub work {
 
     my $last_job_time;
 
+    my %active_js = map { $_ => 1 } @{$self->{job_servers}};
+
     while (1) {
+        my @jobby_js = keys %active_js;
 
-        my @jss;
-        my $need_sleep = 1;
+        %active_js = ();
 
-        my $js_count = @{ $self->{job_servers} };
+        my $js_count = @jobby_js;
         my $js_offset = int(rand($js_count));
+        my $is_idle = 0;
 
         for (my $i = 0; $i < $js_count; $i++) {
             my $js_index = ($i + $js_offset) % $js_count;
-            my $js = $self->{job_servers}->[$js_index];
+            my $js = $jobby_js[$js_index];
             my $jss = $self->_get_js_sock($js)
                 or next;
 
@@ -299,13 +302,15 @@ sub work {
                 $res = Gearman::Util::read_res_packet($jss, \$err);
                 unless ($res) {
                     $self->uncache_sock($js, "read_res_error");
-                    next;
+                    next; # TODO this next is applying to this inner loop, but we intend to be applying it to the outer one. Test this by making a job server that closes the socket upon receipt of a GRAB JOB request.
                 }
             } while ($res->{type} eq "noop");
 
-            push @jss, [$js, $jss];
-
             if ($res->{type} eq "no_job") {
+                Gearman::Worker->stat(sleep => $js);
+                unless (Gearman::Util::send_req($jss, \$presleep_req)) {
+                    $self->uncache_sock($js, "write_presleep_error");
+                }
                 next;
             }
 
@@ -318,7 +323,7 @@ sub work {
                 die $msg;
             }
 
-            $need_sleep = 0;
+            # TODO uncached sockets that get recreated (reconnected) will not be asleep, so need to be part of the active list in order to be handled properly.
 
             ${ $res->{'blobref'} } =~ s/^(.+?)\0(.+?)\0//
                 or die "Uh, regexp on job_assign failed";
@@ -355,27 +360,45 @@ sub work {
 
             unless (Gearman::Util::send_req($jss, \$work_req)) {
                 $self->uncache_sock($js, "write_res_error");
+                next;
             }
+
+            $active_js{$js} = 1;
         }
 
-        my $is_idle = 0;
-        if ($need_sleep) {
-            $is_idle = 1;
-            my $wake_vec = '';
+        my @jss;
+
+        foreach my $js (@{$self->{job_servers}}) {
+            my $jss = $self->_get_js_sock($js)
+                or next;
+            push @jss, [$js, $jss];
+        }
+
+        $is_idle = 1;
+        my $wake_vec = '';
+
+        foreach my $j (@jss) {
+            my ($js, $jss) = @$j;
+            my $fd = $jss->fileno;
+            vec($wake_vec, $fd, 1) = 1;
+        }
+
+        my $timeout = keys %active_js ? 0 : (10 + rand(2));
+
+
+        # chill for some arbitrary time until we're woken up again
+        my $nready = select(my $wout = $wake_vec, undef, undef, $timeout);
+
+        if ($nready) {
             foreach my $j (@jss) {
                 my ($js, $jss) = @$j;
-                unless (Gearman::Util::send_req($jss, \$presleep_req)) {
-                    $self->uncache_sock($js, "write_presleep_error");
-                    next;
-                }
                 my $fd = $jss->fileno;
-                vec($wake_vec, $fd, 1) = 1;
+                $active_js{$js} = 1
+                    if vec($wout, $fd, 1);
             }
-
-            # chill for some arbitrary time until we're woken up again
-            my $nready = select($wake_vec, undef, undef, 60);
-            $is_idle = 0 if $nready;
         }
+
+        $is_idle = 0 if keys %active_js;
 
         return if $stop_if->($is_idle, $last_job_time);
     }
