@@ -139,7 +139,7 @@ sub job_servers {
 
 sub add_task {
     my Gearman::Client::Async $self = shift;
-    my Gearman::Task $task = shift;
+    my Gearman::Task $task = &_get_task_from_args;
 
     my $try_again;
     $try_again = sub {
@@ -169,14 +169,20 @@ sub add_task {
         $js->get_in_ready_state(
                                 # on_ready:
                                 sub {
-                                    my $timer;
+                                    my ($overall_timer, $try_timer);
                                     if (my $timeout = $task->{timeout}) {
-                                        $timer = Danga::Socket->AddTimer($timeout, sub {
+                                        $overall_timer = Danga::Socket->AddTimer($timeout, sub {
                                             $task->final_fail('timeout');
                                         });
                                     }
+                                    if (my $timeout = $task->{try_timeout}) {
+                                        $try_timer = Danga::Socket->AddTimer($timeout, sub {
+                                            $task->fail('timeout');
+                                        });
+                                    }
                                     $task->set_on_post_hooks(sub {
-                                        $timer->cancel if $timer;
+                                        $overall_timer->cancel if $overall_timer;
+                                        $try_timer->cancel if $try_timer;
 
                                         # ALSO clean up our $js (connection's) waiting stuff:
                                         $js->give_up_on($task);
@@ -216,6 +222,72 @@ sub client { $_[0] }
 # as a Gearman::Client-like thing, we'll be asked for our prefix, which this module
 # currently doesn't support, but the base Gearman libraries expect.
 sub prefix { "" }
+
+sub new_task_set {
+    my Gearman::Client::Async $self = shift;
+
+    return $self;
+}
+
+sub wait {
+    my Gearman::Client::Async $self = shift;
+
+    my %opts = @_;
+
+    if (my $timeout = delete $opts{timeout}) {
+
+    }
+
+    my @job_servers = @{$self->{job_servers}};
+
+    Danga::Socket->SetPostLoopCallback(sub {
+        foreach my $js (@job_servers) {
+            return 1 if $js->stuff_outstanding;
+        }
+        return 0;
+    });
+
+    Danga::Socket->EventLoop;
+}
+
+sub _get_task_from_args {
+    my Gearman::Task $task;
+    if (ref $_[0]) {
+        $task = $_[0];
+        Carp::croak("Argument isn't a Gearman::Task") unless ref $_[0] eq "Gearman::Task";
+    } else {
+        my ($func, $arg_p, $opts) = @_;
+        my $argref = ref $arg_p ? $arg_p : \$arg_p;
+        Carp::croak("Function argument must be scalar or scalarref")
+            unless ref $argref eq "SCALAR";
+        $task = Gearman::Task->new($func, $argref, $opts);
+    }
+    return $task;
+
+}
+
+# given a (func, arg_p, opts?), returns either undef (on fail) or scalarref of result
+sub do_task {
+    my Gearman::Client::Async $self = shift;
+    my Gearman::Task $task = &_get_task_from_args;
+
+    my $ret = undef;
+    my $did_err = 0;
+
+    $task->{on_complete} = sub {
+        $ret = shift;
+    };
+
+    $task->{on_fail} = sub {
+        $did_err = 1;
+    };
+
+    $self->add_task($task);
+    $self->wait(timeout => $task->timeout);
+
+    return $did_err ? undef : $ret;
+
+}
 
 
 1;

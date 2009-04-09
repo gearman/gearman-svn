@@ -89,6 +89,22 @@ sub new {
     return $self;
 }
 
+sub as_string {
+    my Gearman::Client::Async::Connection $self = shift;
+
+    my $hostspec = $self->{hostspec};
+
+    my $waiting     = $self->{waiting};
+    my $need_handle = $self->{need_handle};
+    my $requests    = $self->{requests};
+
+    return sprintf("%s(%d,%d,%d)", $hostspec,
+        scalar keys %$waiting,
+        scalar @$need_handle,
+        scalar @$requests,
+    );
+}
+
 sub close_when_finished {
     my Gearman::Client::Async::Connection $self = shift;
     # FIXME: implement
@@ -333,6 +349,8 @@ sub is_worker {
 sub stuff_outstanding {
     my Gearman::Client::Async::Connection $self = shift;
     return
+        @{$self->{on_ready}} ||
+        @{$self->{on_error}} ||
         @{$self->{need_handle}} ||
         %{$self->{waiting}};
 }
