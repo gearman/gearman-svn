@@ -37,7 +37,7 @@ use Scalar::Util qw(weaken);
 use IO::Handle;
 use Socket qw(PF_INET IPPROTO_TCP TCP_NODELAY SOL_SOCKET SOCK_STREAM);
 
-sub DEBUGGING () { 1 }
+sub DEBUGGING () { 0 }
 
 sub new {
     my Gearman::Client::Async::Connection $self = shift;
