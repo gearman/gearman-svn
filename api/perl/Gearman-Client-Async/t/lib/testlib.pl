@@ -17,6 +17,7 @@ use Gearman::Client::Async;
 use POSIX qw( :sys_wait_h );
 use List::Util qw(first);;
 use IO::Socket::INET;
+use File::Basename 'dirname';
 
 Danga::Socket->SetLoopTimeout(100);
 
@@ -28,6 +29,7 @@ sub start_server {
     my($port) = @_;
     my @loc = ("$Bin/../../../../server/gearmand",    # using svn
                "$Bin/../../../../../server/gearmand", # using svn, with disttest
+               dirname($^X) . '/gearmand',     # local installs (e.g. perlbrew)
                '/usr/bin/gearmand',            # where some distros might put it
                '/usr/sbin/gearmand',           # where other distros might put it
                );
@@ -56,7 +58,7 @@ sub start_child {
     my $pid = fork();
     die $! unless defined $pid;
     unless ($pid) {
-        exec 'perl', '-Iblib/lib', '-Ilib', @$cmd or die $!;
+        exec $^X, '-Iblib/lib', '-Ilib', @$cmd or die $!;
     }
     $pid;
 }

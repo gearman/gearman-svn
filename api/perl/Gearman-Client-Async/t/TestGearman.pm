@@ -5,6 +5,7 @@ use strict;
 use List::Util qw(first);;
 use IO::Socket::INET;
 use POSIX qw( :sys_wait_h );
+use File::Basename 'dirname';
 
 our $Bin;
 use FindBin qw( $Bin );
@@ -22,6 +23,7 @@ sub start_server {
     my($port) = @_;
     my @loc = ("$Bin/../../../../server/gearmand",     # using svn
                "$Bin/../../../../../server/gearmand",  # using svn and 'disttest'
+               dirname($^X) . '/gearmand',     # local installs (e.g. perlbrew)
                '/usr/bin/gearmand',            # where some distros might put it
                '/usr/sbin/gearmand',           # where other distros might put it
                );

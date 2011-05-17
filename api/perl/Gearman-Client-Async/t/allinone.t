@@ -12,7 +12,7 @@ use Gearman::Server;
 use Gearman::Client::Async;
 
 my $server = Gearman::Server->new();
-$server->start_worker('t/worker.pl');
+$server->start_worker(sub { exec $^X, 't/worker.pl' });
 
 my $client = Gearman::Client::Async->new(job_servers => [ $server ]);
 
